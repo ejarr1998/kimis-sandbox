@@ -89,28 +89,39 @@
   .ghost:hover { color: var(--paper); }
   .hidden { display: none !important; }
 
-  /* ---------- dossier (opening) ---------- */
-  .dossier {
+  /* ---------- bright aged paper (dossier + warrant share this) ---------- */
+  .paper-doc {
     background:
-      linear-gradient(rgba(22,19,15,0.55), rgba(22,19,15,0.55)),
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='0.16'/%3E%3C/svg%3E"),
-      linear-gradient(170deg, #e9dfc8, #d9cba9);
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='0.10'/%3E%3C/svg%3E"),
+      radial-gradient(ellipse at 30% 20%, rgba(255,250,235,0.55), transparent 65%),
+      linear-gradient(170deg, #f2e9d3, #ddcfae);
     color: #2c2519;
     border: none;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.55), inset 0 0 60px rgba(120,90,40,0.12);
-    transform: rotate(-0.4deg);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.55), inset 0 0 60px rgba(120,90,40,0.10);
   }
+  .paper-doc .panel-title { color: #6d5426; }
+  .paper-doc .panel-title::after { background: rgba(109,84,38,0.35); }
+  .paper-doc .ghost { color: #6d5426; }
+
+  /* ---------- dossier (opening) ---------- */
+  .dossier { transform: rotate(-0.4deg); padding: 1.5rem 1.6rem; }
   .dossier .stamp {
     position: absolute; top: 0.9rem; right: 1rem;
     font-family: "Special Elite", monospace; font-size: 0.65rem;
     color: var(--red); border: 2px solid var(--red); border-radius: 3px;
     padding: 0.25rem 0.6rem; transform: rotate(6deg); letter-spacing: 0.2em;
-    text-transform: uppercase; opacity: 0.8;
+    text-transform: uppercase; opacity: 0.85;
   }
-  .dossier p { font-size: 1.02rem; line-height: 1.75; margin: 0.4rem 0 0.8rem; }
-  .dossier .panel-title { color: #6d5426; }
-  .dossier .panel-title::after { background: rgba(109,84,38,0.35); }
-  .dossier .ghost { color: #6d5426; }
+  .dossier p {
+    font-size: 1.08rem; line-height: 1.8; margin: 0.5rem 0 0.9rem;
+    color: #241d12;
+  }
+  .dossier p::first-letter {
+    font-family: "Special Elite", monospace;
+    font-size: 2.4rem; line-height: 1;
+    float: left; padding: 0.15rem 0.5rem 0 0;
+    color: var(--red);
+  }
 
   /* ---------- suspect wall ---------- */
   .suspects { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; }
@@ -153,7 +164,7 @@
   /* ---------- evidence locker ---------- */
   .evidence-item {
     position: relative;
-    background: linear-gradient(170deg, #d9c9a3, #c9b788);
+    background: linear-gradient(170deg, #dccdaa, #cdbd93);
     color: #2c2519;
     border-radius: 3px 3px 8px 3px;
     padding: 0.7rem 0.9rem 0.7rem 2.4rem;
@@ -169,8 +180,15 @@
   }
   .evidence-item:hover { transform: translateY(-2px); }
   .evidence-item .en { font-family: "Special Elite", monospace; font-size: 0.85rem; }
-  .evidence-item .ed { font-size: 0.85rem; color: #5a4c30; margin-top: 0.3rem; line-height: 1.5; font-style: italic; }
-  .evidence-item.examined { opacity: 0.8; }
+  .evidence-item .ed {
+    font-size: 0.9rem; color: #45391f; margin-top: 0.35rem; line-height: 1.55; font-style: italic;
+    display: none;
+  }
+  .evidence-item.open .ed { display: block; animation: rise .25s ease both; }
+  .evidence-item .hint {
+    font-size: 0.72rem; color: #7a6a45; font-style: italic; margin-top: 0.2rem;
+  }
+  .evidence-item.examined { opacity: 0.92; }
   .evidence-item .tag-done {
     font-family: "Special Elite", monospace; color: var(--red); font-size: 0.68rem;
     margin-left: 0.5rem; letter-spacing: 0.1em;
@@ -254,27 +272,113 @@
   }
   #chatbar input:focus { outline: 1px solid var(--brass); }
 
-  /* ---------- warrant (accuse) ---------- */
+  /* ---------- warrant (accusation) — the official document ---------- */
   .warrant {
-    background:
-      linear-gradient(rgba(22,19,15,0.5), rgba(22,19,15,0.5)),
-      linear-gradient(170deg, #e9dfc8, #d9cba9);
-    color: #2c2519; border: none;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.55);
-    transform: rotate(0.3deg);
+    padding: 0 0 1.4rem;
+    transform: rotate(0.2deg);
+    border-top: 6px solid var(--red);
   }
-  .warrant .panel-title { color: var(--red); }
-  .warrant .panel-title::after { background: rgba(138,47,43,0.3); }
-  .warrant label { font-family: "Special Elite", monospace; font-size: 0.7rem;
-    letter-spacing: 0.2em; text-transform: uppercase; color: #6d5426; }
-  .warrant select {
-    width: 100%; padding: 0.6rem; margin: 0.3rem 0 0.9rem;
-    background: rgba(255,252,240,0.7); color: #2c2519;
-    border: 1px solid rgba(109,84,38,0.5); border-radius: 3px;
-    font-family: inherit; font-size: 0.95rem;
+  .warrant-inner { padding: 0 1.5rem; }
+  .warrant-head {
+    display: flex; align-items: center; gap: 0.9rem;
+    padding: 1.2rem 1.5rem 0.9rem;
+    border-bottom: 3px double rgba(109,84,38,0.5);
   }
-  .warrant .sub { color: #6d5c3e; }
-  .warrant .ghost { color: #6d5426; }
+  .warrant-star {
+    width: 46px; height: 46px; flex: none;
+    border-radius: 50%;
+    border: 2px solid var(--red);
+    color: var(--red);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.3rem;
+    font-family: "Special Elite", monospace;
+    transform: rotate(-8deg);
+  }
+  .warrant-office {
+    font-family: "Special Elite", monospace; font-size: 0.62rem;
+    letter-spacing: 0.3em; text-transform: uppercase; color: #6d5426;
+  }
+  .warrant-title {
+    font-family: "Special Elite", monospace;
+    font-size: 1.5rem; letter-spacing: 0.06em; color: #241d12;
+    margin-top: 0.15rem;
+  }
+  .warrant-no {
+    margin-left: auto; text-align: right;
+    font-family: "Special Elite", monospace; font-size: 0.72rem;
+    color: #6d5426; line-height: 1.6;
+  }
+  .warrant-body {
+    font-size: 1rem; line-height: 1.75; color: #33291a;
+    margin: 1.1rem 0 0.4rem;
+  }
+  .warrant-body b { color: var(--red); }
+  .warrant .matter {
+    font-family: "Special Elite", monospace; font-size: 0.72rem;
+    letter-spacing: 0.25em; text-transform: uppercase; color: #6d5426;
+    margin: 1.1rem 0 0.3rem;
+  }
+  .charge {
+    display: flex; align-items: baseline; gap: 0.6rem;
+    margin: 0.9rem 0; font-size: 1rem; color: #33291a;
+  }
+  .charge .lab {
+    flex: none; font-style: italic;
+  }
+  .charge select {
+    flex: 1; min-width: 0;
+    appearance: none; -webkit-appearance: none;
+    background: transparent;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238a2f2b'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 0.2rem center;
+    border: none; border-bottom: 2px solid rgba(138,47,43,0.55);
+    border-radius: 0;
+    padding: 0.25rem 1.1rem 0.25rem 0.3rem;
+    font-family: "Special Elite", monospace; font-size: 0.95rem;
+    color: var(--red);
+    cursor: pointer;
+  }
+  .charge select:focus { outline: none; border-bottom-color: var(--red); background-color: rgba(138,47,43,0.06); }
+  .warrant-warning {
+    margin-top: 1.2rem;
+    font-family: "Special Elite", monospace; font-size: 0.68rem;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: #6d5426;
+    border: 1px dashed rgba(138,47,43,0.5);
+    padding: 0.5rem 0.8rem;
+    display: inline-block;
+  }
+  .warrant-sign {
+    margin-top: 1.4rem;
+    display: flex; align-items: flex-end; gap: 1.2rem; flex-wrap: wrap;
+  }
+  .sig-block { flex: 1; min-width: 180px; }
+  .sig-name {
+    font-family: "EB Garamond", serif; font-style: italic;
+    font-size: 1.5rem; color: #241d12;
+    padding-bottom: 0.15rem;
+  }
+  .sig-line {
+    border-top: 1px solid #241d12;
+    font-family: "Special Elite", monospace; font-size: 0.62rem;
+    letter-spacing: 0.2em; text-transform: uppercase; color: #6d5426;
+    padding-top: 0.25rem;
+  }
+  .seal-btn {
+    width: 96px; height: 96px; border-radius: 50%; flex: none;
+    background: radial-gradient(circle at 35% 30%, #b2463f, var(--red) 55%, #571d1a 90%);
+    color: #f3e6ce;
+    font-family: "Special Elite", monospace;
+    font-size: 0.62rem; letter-spacing: 0.15em; text-transform: uppercase;
+    line-height: 1.5;
+    box-shadow: 0 5px 16px rgba(0,0,0,0.5), inset 0 2px 6px rgba(255,255,255,0.25), inset 0 -4px 8px rgba(0,0,0,0.35);
+    border: 3px double rgba(243,230,206,0.55);
+    transition: transform .12s, box-shadow .12s;
+    transform: rotate(-4deg);
+  }
+  .seal-btn:hover { transform: rotate(-4deg) scale(1.05); }
+  .seal-btn:active { transform: rotate(-4deg) scale(0.95); }
+  .warrant .ghost { margin-top: 0.9rem; }
 
   /* ---------- reveal ---------- */
   .verdict-stamp {
@@ -302,6 +406,10 @@
   @media (max-width: 560px) {
     details.cluegroup li { max-width: 100%; }
     .meta { display: none; }
+    .warrant-inner { padding: 0 1rem; }
+    .warrant-head { padding: 1rem 1rem 0.8rem; }
+    .warrant-title { font-size: 1.15rem; }
+    .warrant-no { display: none; }
   }
 </style>
 </head>
@@ -324,7 +432,7 @@
   <div id="game" class="hidden">
 
     <!-- dossier: opening scene -->
-    <div class="panel dossier" id="opening-panel">
+    <div class="panel paper-doc dossier" id="opening-panel">
       <div class="stamp">Case File</div>
       <div class="panel-title">Initial Report</div>
       <p id="opening"></p>
@@ -341,7 +449,7 @@
 
     <!-- evidence locker -->
     <div class="panel" id="evidence-panel">
-      <div class="panel-title">Evidence Locker <span class="right">tap a tag to examine</span></div>
+      <div class="panel-title">Evidence Locker <span class="right">tap a tag to examine · tap again to fold</span></div>
       <div id="evidence"></div>
     </div>
 
@@ -376,14 +484,44 @@
     </div>
 
     <!-- warrant -->
-    <div class="panel warrant hidden" id="accuse-panel">
-      <div class="panel-title">Arrest Warrant — Final</div>
-      <p class="sub" style="font-style:italic">Signed accusations cannot be taken back, detective.</p>
-      <label>The killer</label><select id="pick-killer"></select>
-      <label>The weapon</label><select id="pick-weapon"></select>
-      <label>The location</label><select id="pick-location"></select>
-      <button class="stamp-btn" style="width:100%" onclick="submitAccusation()">Sign &amp; Submit</button>
-      <div style="text-align:center"><button class="ghost" onclick="hideAccuse()">not yet — keep investigating</button></div>
+    <div class="panel paper-doc warrant hidden" id="accuse-panel">
+      <div class="warrant-head">
+        <div class="warrant-star">✪</div>
+        <div>
+          <div class="warrant-office">Homicide Division · City Precinct</div>
+          <div class="warrant-title">Warrant of Arrest</div>
+        </div>
+        <div class="warrant-no">Warrant № <span id="w-code"></span><br>Filed <span id="w-date"></span></div>
+      </div>
+      <div class="warrant-inner">
+        <p class="warrant-body">
+          <span class="matter" style="margin:0">In the matter of</span><br>
+          the homicide of <b id="w-victim"></b>, investigated under Case № <b id="w-code2"></b>,
+          the undersigned detective, having examined the evidence and testimony on record,
+          does hereby swear upon this warrant that:
+        </p>
+        <div class="charge">
+          <span class="lab">the murder was committed by</span>
+          <select id="pick-killer"></select>
+        </div>
+        <div class="charge">
+          <span class="lab">with the instrument</span>
+          <select id="pick-weapon"></select>
+        </div>
+        <div class="charge">
+          <span class="lab">at the place known as</span>
+          <select id="pick-location"></select>
+        </div>
+        <div class="warrant-warning">⚠ A signed warrant is final. It cannot be amended, withdrawn, or taken back.</div>
+        <div class="warrant-sign">
+          <div class="sig-block">
+            <div class="sig-name">Det. <span id="w-detective"></span></div>
+            <div class="sig-line">Signature of investigating detective</div>
+          </div>
+          <button class="seal-btn" onclick="submitAccusation()">Press<br>the<br>Seal</button>
+        </div>
+        <div><button class="ghost" onclick="hideAccuse()">not yet — keep investigating</button></div>
+      </div>
     </div>
 
     <!-- reveal -->
@@ -407,6 +545,7 @@
   const CODE = params.get("case"), DETECTIVE = params.get("detective");
   let CASE = null, playerRef = null, myClues = [], chats = {}, examined = [],
       accused = null, currentSuspect = null, notesSummary = "";
+  const evOpen = new Set(); // evidence items whose description is unfolded
 
   const $ = (id) => document.getElementById(id);
   const clueText = (c) => typeof c === "string" ? c : c.text;
@@ -472,22 +611,32 @@
     box.innerHTML = "";
     for (const ev of CASE.evidence) {
       const done = examined.includes(ev.id);
+      const open = evOpen.has(ev.id);
       const d = document.createElement("div");
-      d.className = "evidence-item" + (done ? " examined" : "");
+      d.className = "evidence-item" + (done ? " examined" : "") + (open ? " open" : "");
       d.innerHTML = `<div class="en">${ev.name}${done ? '<span class="tag-done">EXAMINED ✓</span>' : ""}</div>` +
-        (done ? `<div class="ed">${ev.description}</div>` : "");
-      d.onclick = () => examine(ev);
+        (done
+          ? `<div class="ed">${ev.description}</div><div class="hint">${open ? "tap to fold ▴" : "tap to review ▾"}</div>`
+          : `<div class="hint">tap to examine</div>`);
+      d.onclick = () => toggleEvidence(ev);
       box.appendChild(d);
     }
   }
 
-  async function examine(ev) {
-    if (examined.includes(ev.id)) return;
-    examined.push(ev.id);
-    const fresh = (ev.reveals || []).filter(f => !myClues.some(c => overlap(clueText(c), f)));
-    myClues.push(...fresh.map(text => ({ text, from: "📦 " + ev.name, at: new Date().toISOString() })));
-    renderEvidence(); renderClues(); renderSuspects();
-    await persist();
+  async function toggleEvidence(ev) {
+    if (!examined.includes(ev.id)) {
+      // first examination: log the reveals as clues and open the tag
+      examined.push(ev.id);
+      evOpen.add(ev.id);
+      const fresh = (ev.reveals || []).filter(f => !myClues.some(c => overlap(clueText(c), f)));
+      myClues.push(...fresh.map(text => ({ text, from: "📦 " + ev.name, at: new Date().toISOString() })));
+      renderEvidence(); renderClues(); renderSuspects();
+      await persist();
+    } else {
+      // already examined: just fold / unfold the description
+      if (evOpen.has(ev.id)) evOpen.delete(ev.id); else evOpen.add(ev.id);
+      renderEvidence();
+    }
   }
 
   function renderClues() {
@@ -653,6 +802,11 @@ HARD RULES:
     fill("pick-killer", CASE.suspects.map(s => s.name));
     fill("pick-weapon", CASE.weapons);
     fill("pick-location", CASE.locations);
+    $("w-code").textContent = CODE;
+    $("w-code2").textContent = CODE;
+    $("w-victim").textContent = CASE.victim.name;
+    $("w-detective").textContent = DETECTIVE;
+    $("w-date").textContent = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
     $("accuse-panel").classList.remove("hidden");
     $("accuse-panel").scrollIntoView({ behavior: "smooth" });
   }
