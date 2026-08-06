@@ -55,6 +55,7 @@ Requirements:
 - Distribute clues so at least 3 different suspects hold pieces of the solution.
 - Suspects must NEVER need to reference people outside the 6 suspects and the victim — if a fact needs a source, it belongs in an evidence item, not an invented bystander.
 - Red herrings welcome, but they must be resolvable as innocent.
+- IMPORTANT: randomize ordering — do NOT put the killer first among suspects, and do NOT put the true weapon/location first in their lists.
 - Victim era/setting: pick something atmospheric (1920s jazz club, remote lighthouse, luxury train, vineyard estate, small-town radio station...). Be original.`;
 
   const VALIDATE_PROMPT = (caseJson) => `You are a ruthless logic auditor for murder mysteries. Here is a case file:
@@ -78,6 +79,15 @@ Rules: solvable=true ONLY if the killer, weapon AND location can all be deduced 
     return JSON.parse(m[0]);
   }
 
+  function shuffle(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
   // ---------- Stage 1: generate ----------
   async function generateCase(onStatus) {
     onStatus?.("🖋 Claude is writing the case…");
@@ -85,6 +95,10 @@ Rules: solvable=true ONLY if the killer, weapon AND location can all be deduced 
     const caseFile = extractJson(raw);
     caseFile.suspects.forEach(s => { s.portrait = null; });
     caseFile.evidence = caseFile.evidence || [];
+    // Never trust the generator's ordering — shuffle lists so answers don't leak by position.
+    caseFile.suspects = shuffle(caseFile.suspects);
+    caseFile.weapons = shuffle(caseFile.weapons);
+    caseFile.locations = shuffle(caseFile.locations);
     return caseFile;
   }
 
