@@ -55,6 +55,7 @@ Requirements:
 - Distribute clues so at least 3 different suspects hold pieces of the solution.
 - Suspects must NEVER need to reference people outside the 6 suspects and the victim — if a fact needs a source, it belongs in an evidence item, not an invented bystander.
 - Red herrings welcome, but they must be resolvable as innocent.
+- NAMES: each character has exactly ONE full name, used identically in every field of the document. Double-check every mention before finishing — a name spelled two ways (e.g. "Frost" vs "Voss") is a fatal defect.
 - IMPORTANT: randomize ordering — do NOT put the killer first among suspects, and do NOT put the true weapon/location first in their lists.
 - Victim era/setting: pick something atmospheric (1920s jazz club, remote lighthouse, luxury train, vineyard estate, small-town radio station...). Be original.`;
 
@@ -62,16 +63,29 @@ Requirements:
 
 ${JSON.stringify(caseJson)}
 
-Simulate a sharp detective who can only learn facts in suspects' "knows"/"secrets" (secrets only via very pointed questions) and evidence items' "reveals". Answer STRICT JSON:
+Perform THREE audits:
+
+AUDIT A — Name consistency: extract the canonical full name of every suspect and the victim. Search the ENTIRE document (all knows, secrets, alibis, evidence, keyClues, recap, openingScene) for any mention that uses a DIFFERENT or MISSPELLED variant of those names (e.g. "Voss" when the roster says "Frost", "Dr. Rousseau" when the roster says "Dr. Rousseau-Lane"). Any near-match surname that differs from the canonical one counts as a defect. Note: a character being referred to by first name, last name, or title+last name is fine as long as the spelling matches canon.
+
+AUDIT B — World closure: no suspect's scripted facts may depend on people outside the suspect roster and victim.
+
+AUDIT C — Solvability: simulate a sharp detective who can only learn facts in suspects' "knows"/"secrets" (secrets only via very pointed questions) and evidence items' "reveals". The killer, weapon AND location must all be deducible without guessing, and every keyClue must be reachable.
+
+Answer STRICT JSON:
 {
   "solvable": true/false,
-  "issues": ["string — each logical problem: unreachable clue, contradiction, insufficient distinguishing evidence, etc."],
+  "consistent": true/false,
+  "issues": ["string — each problem found"],
+  "fixes": [
+    { "find": "string — exact wrong text as it appears, e.g. 'Helena Voss' or 'Voss'",
+      "replace": "string — correct text, e.g. 'Helena Frost' or 'Frost'" }
+  ],
   "patches": [
     { "suspectId": "string or null", "evidenceId": "string or null",
-      "addKnowledge": "string — ONE fact to inject into that suspect's knows[] or that evidence's reveals[] to fix a gap" }
+      "addKnowledge": "string — ONE fact to inject into that suspect's knows[] or that evidence's reveals[] to fix a logic gap" }
   ]
 }
-Rules: solvable=true ONLY if the killer, weapon AND location can all be deduced without guessing. Also verify: no suspect's scripted facts depend on people outside the suspect roster and victim; every keyClue is reachable from some knows/secrets/reveals entry. If small fixes suffice, give patches (max 3, each naming suspectId OR evidenceId). If the case is fundamentally broken, set solvable=false with empty patches.`;
+Rules: use fixes[] for name/consistency repairs (max 6), patches[] for solvability gaps (max 3). Set solvable=false AND consistent=false only for fundamentally broken cases with no repair path.`;
 
   function extractJson(text) {
     const m = text.match(/\{[\s\S]*\}/);
@@ -103,27 +117,54 @@ Rules: solvable=true ONLY if the killer, weapon AND location can all be deduced 
   }
 
   // ---------- Stage 2: validate + patch ----------
-  async function validateAndPatch(caseFile, onStatus) {
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      onStatus?.(`🔍 Solvability audit (pass ${attempt})…`);
-      const raw = await SandboxAPI.claude(VALIDATE_PROMPT(caseFile), { maxTokens: 1500 });
-      const verdict = extractJson(raw);
-      if (verdict.solvable) return { caseFile, issues: verdict.issues || [] };
-      if (!verdict.patches || verdict.patches.length === 0) {
-        throw new Error("Case failed validation and could not be patched: " + (verdict.issues || []).join("; "));
-      }
-      onStatus?.(`🩹 Patching: ${verdict.patches.length} clue fix(es)…`);
-      for (const p of verdict.patches) {
-        if (p.suspectId) {
-          const s = caseFile.suspects.find(x => x.id === p.suspectId);
-          if (s && p.addKnowledge) s.knows.push(p.addKnowledge);
-        } else if (p.evidenceId) {
-          const ev = caseFile.evidence.find(x => x.id === p.evidenceId);
-          if (ev && p.addKnowledge) ev.reveals.push(p.addKnowledge);
-        }
+  function applyFixes(caseFile, fixes) {
+    let applied = 0;
+    // Longest "find" first so specific phrases are replaced before bare surnames.
+    const sorted = [...fixes].filter(f => f.find && f.replace && f.find !== f.replace)
+      .sort((a, b) => b.find.length - a.find.length);
+    let json = JSON.stringify(caseFile);
+    for (const f of sorted) {
+      if (json.includes(f.find)) {
+        json = json.split(f.find).join(f.replace);
+        applied++;
       }
     }
-    throw new Error("Case still not solvable after 3 patch attempts.");
+    return { caseFile: JSON.parse(json), applied };
+  }
+
+  async function validateAndPatch(caseFile, onStatus) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      onStatus?.(`🔍 Case audit (pass ${attempt})…`);
+      const raw = await SandboxAPI.claude(VALIDATE_PROMPT(caseFile), { maxTokens: 2000 });
+      const verdict = extractJson(raw);
+      const needsFix = verdict.consistent === false && (verdict.fixes || []).length > 0;
+      if (verdict.solvable && !needsFix) return { caseFile, issues: verdict.issues || [] };
+
+      let changed = false;
+      if (needsFix) {
+        const res = applyFixes(caseFile, verdict.fixes);
+        caseFile = res.caseFile;
+        changed = res.applied > 0;
+        onStatus?.(`✏️ Name consistency repairs: ${res.applied}…`);
+      }
+      const patches = verdict.patches || [];
+      if (!verdict.solvable && patches.length) {
+        onStatus?.(`🩹 Patching: ${patches.length} clue fix(es)…`);
+        for (const p of patches) {
+          if (p.suspectId) {
+            const s = caseFile.suspects.find(x => x.id === p.suspectId);
+            if (s && p.addKnowledge) { s.knows.push(p.addKnowledge); changed = true; }
+          } else if (p.evidenceId) {
+            const ev = caseFile.evidence.find(x => x.id === p.evidenceId);
+            if (ev && p.addKnowledge) { ev.reveals.push(p.addKnowledge); changed = true; }
+          }
+        }
+      }
+      if (!changed) {
+        throw new Error("Case failed audit and could not be repaired: " + (verdict.issues || []).join("; "));
+      }
+    }
+    throw new Error("Case still failing audit after 3 repair attempts.");
   }
 
   // ---------- Stage 3: portraits ----------
@@ -145,7 +186,7 @@ Rules: solvable=true ONLY if the killer, weapon AND location can all be deduced 
   // ---------- Firestore ----------
   function makeCode() {
     const letters = "ABCDEFGHJKMNPQRSTUVWXYZ";
-    return Array.from({ length: 4 }, () => letters[Math.floor(Math.random() * letters.length)]).join("");
+    return Array.from({ length: 4 }, () => letters[Math.floor(Math.random() * letters.length)].join ? letters[Math.floor(Math.random() * letters.length)] : "").join("");
   }
 
   async function saveCase(caseFile) {
