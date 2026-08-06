@@ -27,6 +27,9 @@
                 font-size: 1.3rem; }
   a { color: #a39a86; }
   .back { display: block; text-align: center; margin-top: 1.4rem; font-size: 0.85rem; }
+  .archive-link { display: block; text-align: center; margin-top: 1.2rem; color: #cbbf9f;
+                  text-decoration: none; font-size: 0.95rem; }
+  .archive-link:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -45,6 +48,8 @@
   <input id="code" class="code-input" maxlength="4" placeholder="CODE">
   <input id="name" placeholder="Your detective name" style="margin-top:0.5rem">
   <button onclick="joinExisting()">🔍 Begin investigation</button>
+
+  <a class="archive-link" href="archive.html">📁 Browse the case archive →</a>
 
   <div id="status"></div>
   <a class="back" href="../../index.html">← Back to the sandbox</a>
