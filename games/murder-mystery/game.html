@@ -165,6 +165,15 @@
   const clueText = (c) => typeof c === "string" ? c : c.text;
   const clueFrom = (c) => typeof c === "string" ? "Case notes" : (c.from || "Case notes");
 
+  function shuffle(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
   async function boot() {
     if (!CODE || !DETECTIVE) { location.href = "index.html"; return; }
     try {
@@ -393,7 +402,8 @@ HARD RULES:
 
   // ---------- accusation ----------
   function showAccuse() {
-    const fill = (id, items) => { $(id).innerHTML = items.map(x => `<option>${x}</option>`).join(""); };
+    // Shuffle every time so the correct option never leaks by position.
+    const fill = (id, items) => { $(id).innerHTML = shuffle(items).map(x => `<option>${x}</option>`).join(""); };
     fill("pick-killer", CASE.suspects.map(s => s.name));
     fill("pick-weapon", CASE.weapons);
     fill("pick-location", CASE.locations);
