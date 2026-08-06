@@ -1,14 +1,25 @@
 /**
  * Kimi's Sandbox — shared API helpers
  * Keys are read from localStorage (set via settings.html). Never hardcode keys here.
+ * (Firebase config is safe to commit — it's a public identifier, not a secret.)
  *
  * Usage:
  *   const reply = await SandboxAPI.claude("Say hello");
  *   const img   = await SandboxAPI.grokImage("a cat astronaut");
  *   const audio = await SandboxAPI.elevenTTS("Hello world", voiceId);
+ *   const app   = await SandboxAPI.firebaseApp();
  */
 
 const SandboxAPI = (() => {
+
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyCi5NLrrw11qfwknM6gF22kYnJT2m7ZZ_w",
+    authDomain: "kimi-sandbox-a7043.firebaseapp.com",
+    projectId: "kimi-sandbox-a7043",
+    storageBucket: "kimi-sandbox-a7043.firebasestorage.app",
+    messagingSenderId: "137052341093",
+    appId: "1:137052341093:web:c897d57ff8a3df6eb6d78c"
+  };
 
   function key(name) {
     const v = localStorage.getItem("sandbox_key_" + name);
@@ -99,17 +110,17 @@ const SandboxAPI = (() => {
   }
 
   // ---------- Firebase loader ----------
-  // Loads Firebase (compat CDN) on demand and initializes it with the config
-  // saved in localStorage by settings.html. Returns the initialized app.
+  // Loads Firebase (compat CDN) on demand and initializes it with the baked-in
+  // config (a localStorage override from settings.html takes priority if present).
   async function firebaseApp() {
-    const cfg = localStorage.getItem("sandbox_firebase_config");
-    if (!cfg) throw new Error("No Firebase config saved. Set it on the Settings page.");
+    const override = localStorage.getItem("sandbox_firebase_config");
+    const cfg = override ? JSON.parse(override) : FIREBASE_CONFIG;
     if (!window.firebase) {
       await loadScript("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js");
       await loadScript("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js");
       await loadScript("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js");
     }
-    if (!firebase.apps.length) firebase.initializeApp(JSON.parse(cfg));
+    if (!firebase.apps.length) firebase.initializeApp(cfg);
     return firebase.apps[0];
   }
 
