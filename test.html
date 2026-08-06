@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connection Test — Kimi's Sandbox</title>
+<style>
+  body { font-family: Georgia, serif; background: #faf8f5; color: #3a3630;
+         display: flex; justify-content: center; padding: 2rem 1rem; margin: 0; }
+  .card { width: 100%; max-width: 640px; background: #fff; padding: 2rem;
+          border: 1px solid #e8e2d8; border-radius: 12px;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+  h1 { font-size: 1.6rem; margin-top: 0; }
+  button { padding: 0.7rem 1.6rem; background: #8a7f68; color: #fff; border: none;
+           border-radius: 8px; font-size: 1rem; cursor: pointer; }
+  button:hover { background: #6f6552; }
+  .result { margin-top: 1rem; padding: 0.9rem 1.1rem; border-radius: 8px;
+            font-size: 0.9rem; white-space: pre-wrap; word-break: break-word;
+            border: 1px solid #e8e2d8; background: #fdfcf9; min-height: 1.2rem; }
+  .ok   { border-color: #b8d4b0; background: #f4faf1; }
+  .fail { border-color: #e0b8b0; background: #fdf4f2; }
+  img { max-width: 100%; border-radius: 8px; margin-top: 0.5rem; }
+  audio { width: 100%; margin-top: 0.5rem; }
+  h2 { font-size: 1.05rem; margin: 1.6rem 0 0.5rem; }
+  a { color: #8a7f68; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🧪 Connection Test</h1>
+  <p>Make sure you've saved your keys on the <a href="settings.html">Settings page</a> first.</p>
+
+  <h2>1. Claude (text)</h2>
+  <button onclick="testClaude(this)">Test Claude</button>
+  <div class="result" id="r-claude"></div>
+
+  <h2>2. Grok (text)</h2>
+  <button onclick="testGrokText(this)">Test Grok text</button>
+  <div class="result" id="r-groktext"></div>
+
+  <h2>3. Grok (image)</h2>
+  <button onclick="testGrokImage(this)">Test Grok image</button>
+  <div class="result" id="r-grokimage"></div>
+
+  <h2>4. ElevenLabs (TTS)</h2>
+  <button onclick="testEleven(this)">Test ElevenLabs</button>
+  <div class="result" id="r-eleven"></div>
+
+  <h2>5. Firebase / Firestore</h2>
+  <button onclick="testFirebase(this)">Test Firestore</button>
+  <div class="result" id="r-firebase"></div>
+
+  <p style="margin-top:1.5rem"><a href="index.html">← Back to the hub</a></p>
+</div>
+
+<script src="shared/api.js"></script>
+<script>
+  function show(id, msg, ok) {
+    const el = document.getElementById(id);
+    el.className = "result " + (ok ? "ok" : "fail");
+    el.textContent = msg;
+  }
+  async function run(btn, id, fn) {
+    btn.disabled = true; btn.textContent = "Testing…";
+    show(id, "Working…", true);
+    try { await fn(); }
+    catch (e) { show(id, "❌ " + e.message, false); }
+    finally { btn.disabled = false; btn.textContent = btn.textContent.replace("Testing…", "Test again") || "Test again"; }
+  }
+
+  const testClaude = (b) => run(b, "r-claude", async () => {
+    const t = await SandboxAPI.claude("Reply with exactly: 'Claude is connected!' and nothing else.", { maxTokens: 50 });
+    show("r-claude", "✅ " + t, true);
+  });
+
+  const testGrokText = (b) => run(b, "r-groktext", async () => {
+    const t = await SandboxAPI.grokText("Reply with exactly: 'Grok is connected!' and nothing else.");
+    show("r-groktext", "✅ " + t, true);
+  });
+
+  const testGrokImage = (b) => run(b, "r-grokimage", async () => {
+    const img = await SandboxAPI.grokImage("A tiny happy robot waving, simple flat illustration, warm beige background");
+    const el = document.getElementById("r-grokimage");
+    el.className = "result ok";
+    el.innerHTML = "✅ Image generated:<br><img src='" + img.url + "' alt='test image'>";
+  });
+
+  const testEleven = (b) => run(b, "r-eleven", async () => {
+    const url = await SandboxAPI.elevenTTS("Eleven Labs is connected! Welcome to the sandbox.");
+    const el = document.getElementById("r-eleven");
+    el.className = "result ok";
+    el.innerHTML = "✅ Audio generated:<br><audio controls autoplay src='" + url + "'></audio>";
+  });
+
+  const testFirebase = (b) => run(b, "r-firebase", async () => {
+    await SandboxAPI.firebaseApp();
+    const db = firebase.firestore();
+    const ref = db.collection("sandbox_tests").doc("last-ping");
+    await ref.set({ at: new Date().toISOString(), from: "connection-test page" });
+    const snap = await ref.get();
+    show("r-firebase", "✅ Wrote and read back: " + JSON.stringify(snap.data()), true);
+  });
+</script>
+</body>
+</html>
