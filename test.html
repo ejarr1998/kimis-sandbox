@@ -7,99 +7,272 @@
 <style>
   body { font-family: Georgia, serif; background: #faf8f5; color: #3a3630;
          display: flex; justify-content: center; padding: 2rem 1rem; margin: 0; }
-  .card { width: 100%; max-width: 640px; background: #fff; padding: 2rem;
+  .card { width: 100%; max-width: 680px; background: #fff; padding: 2rem;
           border: 1px solid #e8e2d8; border-radius: 12px;
           box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
   h1 { font-size: 1.6rem; margin-top: 0; }
-  button { padding: 0.7rem 1.6rem; background: #8a7f68; color: #fff; border: none;
-           border-radius: 8px; font-size: 1rem; cursor: pointer; }
+  h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.06em;
+       color: #8a7f68; margin: 2rem 0 0.5rem; border-bottom: 1px solid #e8e2d8;
+       padding-bottom: 0.3rem; }
+  h3 { font-size: 1rem; margin: 1.2rem 0 0.4rem; }
+  button { padding: 0.55rem 1.3rem; background: #8a7f68; color: #fff; border: none;
+           border-radius: 8px; font-size: 0.95rem; cursor: pointer; }
   button:hover { background: #6f6552; }
-  .result { margin-top: 1rem; padding: 0.9rem 1.1rem; border-radius: 8px;
-            font-size: 0.9rem; white-space: pre-wrap; word-break: break-word;
-            border: 1px solid #e8e2d8; background: #fdfcf9; min-height: 1.2rem; }
+  button:disabled { opacity: 0.6; cursor: wait; }
+  .big { padding: 0.8rem 2rem; font-size: 1.05rem; }
+  .result { margin-top: 0.6rem; padding: 0.8rem 1rem; border-radius: 8px;
+            font-size: 0.85rem; white-space: pre-wrap; word-break: break-word;
+            border: 1px solid #e8e2d8; background: #fdfcf9; min-height: 1rem;
+            max-height: 260px; overflow-y: auto; }
   .ok   { border-color: #b8d4b0; background: #f4faf1; }
   .fail { border-color: #e0b8b0; background: #fdf4f2; }
+  .skip { border-color: #e0d8c0; background: #fbf9f2; color: #a39a86; }
   img { max-width: 100%; border-radius: 8px; margin-top: 0.5rem; }
   audio { width: 100%; margin-top: 0.5rem; }
-  h2 { font-size: 1.05rem; margin: 1.6rem 0 0.5rem; }
+  #summary { margin-top: 1.2rem; font-size: 1.05rem; font-weight: bold; }
   a { color: #8a7f68; }
 </style>
 </head>
 <body>
 <div class="card">
   <h1>🧪 Connection Test</h1>
-  <p>Make sure you've saved your keys on the <a href="settings.html">Settings page</a> first.</p>
+  <p>Keys come from the <a href="settings.html">Settings page</a>. Providers without a saved key are skipped.</p>
+  <button class="big" onclick="testAll(this)">▶ Test everything</button>
+  <div id="summary"></div>
 
-  <h2>1. Claude (text)</h2>
+  <h2>Core</h2>
+  <h3>Claude (text)</h3>
   <button onclick="testClaude(this)">Test Claude</button>
   <div class="result" id="r-claude"></div>
 
-  <h2>2. Grok (text)</h2>
+  <h3>Grok (text)</h3>
   <button onclick="testGrokText(this)">Test Grok text</button>
   <div class="result" id="r-groktext"></div>
 
-  <h2>3. Grok (image)</h2>
+  <h3>Grok (image)</h3>
   <button onclick="testGrokImage(this)">Test Grok image</button>
   <div class="result" id="r-grokimage"></div>
 
-  <h2>4. ElevenLabs (TTS)</h2>
+  <h3>ElevenLabs (TTS)</h3>
   <button onclick="testEleven(this)">Test ElevenLabs</button>
   <div class="result" id="r-eleven"></div>
 
-  <h2>5. Firebase / Firestore</h2>
+  <h3>Firebase / Firestore</h3>
   <button onclick="testFirebase(this)">Test Firestore</button>
   <div class="result" id="r-firebase"></div>
+
+  <h2>More brains</h2>
+  <h3>Google Gemini</h3>
+  <button onclick="testGemini(this)">Test Gemini</button>
+  <div class="result" id="r-gemini"></div>
+
+  <h3>Groq (fast text)</h3>
+  <button onclick="testGroq(this)">Test Groq</button>
+  <div class="result" id="r-groq"></div>
+
+  <h3>DeepSeek</h3>
+  <button onclick="testDeepseek(this)">Test DeepSeek</button>
+  <div class="result" id="r-deepseek"></div>
+
+  <h3>Mistral</h3>
+  <button onclick="testMistral(this)">Test Mistral</button>
+  <div class="result" id="r-mistral"></div>
+
+  <h2>Media &amp; models</h2>
+  <h3>Replicate</h3>
+  <button onclick="testReplicate(this)">Test Replicate</button>
+  <div class="result" id="r-replicate"></div>
+
+  <h3>fal.ai</h3>
+  <button onclick="testFal(this)">Test fal.ai</button>
+  <div class="result" id="r-fal"></div>
+
+  <h2>Voice &amp; ears</h2>
+  <h3>Deepgram</h3>
+  <button onclick="testDeepgram(this)">Test Deepgram</button>
+  <div class="result" id="r-deepgram"></div>
+
+  <h2>Search &amp; knowledge</h2>
+  <h3>Tavily</h3>
+  <button onclick="testTavily(this)">Test Tavily</button>
+  <div class="result" id="r-tavily"></div>
+
+  <h3>Brave Search</h3>
+  <button onclick="testBrave(this)">Test Brave</button>
+  <div class="result" id="r-brave"></div>
 
   <p style="margin-top:1.5rem"><a href="index.html">← Back to the hub</a></p>
 </div>
 
 <script src="shared/api.js"></script>
 <script>
-  function show(id, msg, ok) {
+  const hasKey = (n) => !!localStorage.getItem("sandbox_key_" + n);
+
+  function show(id, msg, cls) {
     const el = document.getElementById(id);
-    el.className = "result " + (ok ? "ok" : "fail");
+    el.className = "result " + cls;
     el.textContent = msg;
   }
-  async function run(btn, id, fn) {
-    btn.disabled = true; btn.textContent = "Testing…";
-    show(id, "Working…", true);
+  function skip(id, label) { show(id, "⏭ Skipped — no " + label + " key saved on the Settings page.", "skip"); }
+
+  async function run(btn, id, keyName, fn) {
+    if (keyName && !hasKey(keyName)) { skip(id, keyName); return "skip"; }
+    btn.disabled = true;
+    const orig = btn.textContent;
+    btn.textContent = "Testing…";
+    show(id, "Working…", "ok");
+    let outcome = "ok";
     try { await fn(); }
-    catch (e) { show(id, "❌ " + e.message, false); }
-    finally { btn.disabled = false; btn.textContent = btn.textContent.replace("Testing…", "Test again") || "Test again"; }
+    catch (e) { show(id, "❌ " + e.message, "fail"); outcome = "fail"; }
+    finally { btn.disabled = false; btn.textContent = orig; }
+    return outcome;
   }
 
-  const testClaude = (b) => run(b, "r-claude", async () => {
+  async function chatCompletions(url, keyValue, body, errLabel) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", "authorization": "Bearer " + keyValue },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error(errLabel + " error " + res.status + ": " + (await res.text()).slice(0, 400));
+    const data = await res.json();
+    return data.choices[0].message.content;
+  }
+  const PING = "Reply with exactly: 'Connected!' and nothing else.";
+
+  // ----- Core -----
+  const testClaude = (b) => run(b, "r-claude", "claude", async () => {
     const t = await SandboxAPI.claude("Reply with exactly: 'Claude is connected!' and nothing else.", { maxTokens: 50 });
-    show("r-claude", "✅ " + t, true);
+    show("r-claude", "✅ " + t, "ok");
   });
-
-  const testGrokText = (b) => run(b, "r-groktext", async () => {
+  const testGrokText = (b) => run(b, "r-groktext", "grok", async () => {
     const t = await SandboxAPI.grokText("Reply with exactly: 'Grok is connected!' and nothing else.");
-    show("r-groktext", "✅ " + t, true);
+    show("r-groktext", "✅ " + t, "ok");
   });
-
-  const testGrokImage = (b) => run(b, "r-grokimage", async () => {
+  const testGrokImage = (b) => run(b, "r-grokimage", "grok", async () => {
     const img = await SandboxAPI.grokImage("A tiny happy robot waving, simple flat illustration, warm beige background");
     const el = document.getElementById("r-grokimage");
     el.className = "result ok";
     el.innerHTML = "✅ Image generated:<br><img src='" + img.url + "' alt='test image'>";
   });
-
-  const testEleven = (b) => run(b, "r-eleven", async () => {
+  const testEleven = (b) => run(b, "r-eleven", "elevenlabs", async () => {
     const url = await SandboxAPI.elevenTTS("Eleven Labs is connected! Welcome to the sandbox.");
     const el = document.getElementById("r-eleven");
     el.className = "result ok";
     el.innerHTML = "✅ Audio generated:<br><audio controls autoplay src='" + url + "'></audio>";
   });
-
-  const testFirebase = (b) => run(b, "r-firebase", async () => {
+  const testFirebase = (b) => run(b, "r-firebase", null, async () => {
     await SandboxAPI.firebaseApp();
     const db = firebase.firestore();
     const ref = db.collection("sandbox_tests").doc("last-ping");
     await ref.set({ at: new Date().toISOString(), from: "connection-test page" });
     const snap = await ref.get();
-    show("r-firebase", "✅ Wrote and read back: " + JSON.stringify(snap.data()), true);
+    show("r-firebase", "✅ Wrote and read back: " + JSON.stringify(snap.data()), "ok");
   });
+
+  // ----- More brains -----
+  const testGemini = (b) => run(b, "r-gemini", "gemini", async () => {
+    const k = localStorage.getItem("sandbox_key_gemini");
+    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + k, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ contents: [{ parts: [{ text: PING }] }] })
+    });
+    if (!res.ok) throw new Error("Gemini error " + res.status + ": " + (await res.text()).slice(0, 400));
+    const data = await res.json();
+    show("r-gemini", "✅ " + data.candidates[0].content.parts[0].text, "ok");
+  });
+  const testGroq = (b) => run(b, "r-groq", "groq", async () => {
+    const t0 = performance.now();
+    const t = await chatCompletions("https://api.groq.com/openai/v1/chat/completions",
+      localStorage.getItem("sandbox_key_groq"),
+      { model: "llama-3.1-8b-instant", messages: [{ role: "user", content: PING }] }, "Groq");
+    show("r-groq", "✅ " + t + " (" + Math.round(performance.now() - t0) + " ms)", "ok");
+  });
+  const testDeepseek = (b) => run(b, "r-deepseek", "deepseek", async () => {
+    const t = await chatCompletions("https://api.deepseek.com/chat/completions",
+      localStorage.getItem("sandbox_key_deepseek"),
+      { model: "deepseek-chat", messages: [{ role: "user", content: PING }] }, "DeepSeek");
+    show("r-deepseek", "✅ " + t, "ok");
+  });
+  const testMistral = (b) => run(b, "r-mistral", "mistral", async () => {
+    const t = await chatCompletions("https://api.mistral.ai/v1/chat/completions",
+      localStorage.getItem("sandbox_key_mistral"),
+      { model: "mistral-small-latest", messages: [{ role: "user", content: PING }] }, "Mistral");
+    show("r-mistral", "✅ " + t, "ok");
+  });
+
+  // ----- Media & models -----
+  const testReplicate = (b) => run(b, "r-replicate", "replicate", async () => {
+    const res = await fetch("https://api.replicate.com/v1/account", {
+      headers: { "authorization": "Bearer " + localStorage.getItem("sandbox_key_replicate") }
+    });
+    if (!res.ok) throw new Error("Replicate error " + res.status + ": " + (await res.text()).slice(0, 400));
+    const data = await res.json();
+    show("r-replicate", "✅ Authenticated as: " + (data.username || data.type || JSON.stringify(data).slice(0, 120)), "ok");
+  });
+  const testFal = (b) => run(b, "r-fal", "fal", async () => {
+    // fal has no free ping endpoint; verify the key format is accepted by the auth endpoint
+    const res = await fetch("https://rest.fal.ai/models?limit=1", {
+      headers: { "authorization": "Key " + localStorage.getItem("sandbox_key_fal") }
+    });
+    if (!res.ok) throw new Error("fal error " + res.status + ": " + (await res.text()).slice(0, 400));
+    show("r-fal", "✅ Key accepted — model list reachable.", "ok");
+  });
+
+  // ----- Voice & ears -----
+  const testDeepgram = (b) => run(b, "r-deepgram", "deepgram", async () => {
+    const res = await fetch("https://api.deepgram.com/v1/projects", {
+      headers: { "authorization": "Token " + localStorage.getItem("sandbox_key_deepgram") }
+    });
+    if (!res.ok) throw new Error("Deepgram error " + res.status + ": " + (await res.text()).slice(0, 400));
+    const data = await res.json();
+    show("r-deepgram", "✅ Authenticated. Projects: " + (data.projects || []).length, "ok");
+  });
+
+  // ----- Search -----
+  const testTavily = (b) => run(b, "r-tavily", "tavily", async () => {
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ api_key: localStorage.getItem("sandbox_key_tavily"),
+        query: "GitHub Pages", max_results: 1 })
+    });
+    if (!res.ok) throw new Error("Tavily error " + res.status + ": " + (await res.text()).slice(0, 400));
+    const data = await res.json();
+    show("r-tavily", "✅ Search works. Top result: " + (data.results[0] ? data.results[0].title : "none"), "ok");
+  });
+  const testBrave = (b) => run(b, "r-brave", "brave", async () => {
+    const res = await fetch("https://api.search.brave.com/res/v1/web/search?q=GitHub+Pages&count=1", {
+      headers: { "X-Subscription-Token": localStorage.getItem("sandbox_key_brave"), "accept": "application/json" }
+    });
+    if (!res.ok) throw new Error("Brave error " + res.status + ": " + (await res.text()).slice(0, 400));
+    const data = await res.json();
+    show("r-brave", "✅ Search works. Top result: " + (data.web && data.web.results[0] ? data.web.results[0].title : "none"), "ok");
+  });
+
+  // ----- Test all -----
+  async function testAll(btn) {
+    btn.disabled = true; btn.textContent = "Running…";
+    const tests = [
+      ["r-claude", testClaude], ["r-groktext", testGrokText], ["r-grokimage", testGrokImage],
+      ["r-eleven", testEleven], ["r-firebase", testFirebase],
+      ["r-gemini", testGemini], ["r-groq", testGroq], ["r-deepseek", testDeepseek],
+      ["r-mistral", testMistral], ["r-replicate", testReplicate], ["r-fal", testFal],
+      ["r-deepgram", testDeepgram], ["r-tavily", testTavily], ["r-brave", testBrave]
+    ];
+    const fakeBtn = { disabled: false, textContent: "" };
+    let ok = 0, fail = 0, skipped = 0;
+    for (const [id, fn] of tests) {
+      const r = await fn(fakeBtn);
+      if (r === "skip") skipped++;
+      else if (r === "fail") fail++;
+      else ok++;
+    }
+    document.getElementById("summary").textContent =
+      `Done: ✅ ${ok} passed · ❌ ${fail} failed · ⏭ ${skipped} skipped`;
+    btn.disabled = false; btn.textContent = "▶ Test everything";
+  }
 </script>
 </body>
 </html>
