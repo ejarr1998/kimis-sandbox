@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings — Kimi's Sandbox</title>
+<style>
+  body { font-family: Georgia, serif; background: #faf8f5; color: #3a3630;
+         display: flex; justify-content: center; padding: 2rem 1rem; margin: 0; }
+  .card { width: 100%; max-width: 600px; background: #fff; padding: 2rem;
+          border: 1px solid #e8e2d8; border-radius: 12px;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+  h1 { font-size: 1.6rem; margin-top: 0; }
+  label { display: block; margin: 1.2rem 0 0.3rem; font-weight: bold; }
+  input, textarea { width: 100%; box-sizing: border-box; padding: 0.6rem;
+          border: 1px solid #d8d0c0; border-radius: 8px; font-size: 0.95rem;
+          font-family: monospace; }
+  button { margin-top: 1.5rem; padding: 0.7rem 1.6rem; background: #8a7f68;
+          color: #fff; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; }
+  button:hover { background: #6f6552; }
+  .note { color: #7a7264; font-size: 0.85rem; line-height: 1.5; }
+  #status { margin-top: 1rem; color: #4a7a4a; }
+  a { color: #8a7f68; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🔑 Sandbox Settings</h1>
+  <p class="note">Keys are stored <b>only in this browser</b> (localStorage) and are never
+     sent anywhere except directly to the respective API. They are <b>not</b> in the repo.</p>
+
+  <label for="k-claude">Claude API key (Anthropic)</label>
+  <input id="k-claude" type="password" placeholder="sk-ant-...">
+
+  <label for="k-grok">Grok API key (xAI)</label>
+  <input id="k-grok" type="password" placeholder="xai-...">
+
+  <label for="k-eleven">ElevenLabs API key</label>
+  <input id="k-eleven" type="password" placeholder="...">
+
+  <label for="k-firebase">Firebase config (JSON)</label>
+  <textarea id="k-firebase" rows="6" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...",...}'></textarea>
+  <p class="note">Paste the <code>firebaseConfig</code> object from your Firebase console
+     (Project settings → Your apps → Web app).</p>
+
+  <button onclick="save()">Save</button>
+  <div id="status"></div>
+  <p class="note" style="margin-top:1.5rem"><a href="index.html">← Back to the hub</a></p>
+</div>
+<script>
+  const fields = { claude: "k-claude", grok: "k-grok", elevenlabs: "k-eleven" };
+  for (const [name, id] of Object.entries(fields)) {
+    const v = localStorage.getItem("sandbox_key_" + name);
+    if (v) document.getElementById(id).value = v;
+  }
+  const fb = localStorage.getItem("sandbox_firebase_config");
+  if (fb) document.getElementById("k-firebase").value = fb;
+
+  function save() {
+    for (const [name, id] of Object.entries(fields)) {
+      const v = document.getElementById(id).value.trim();
+      if (v) localStorage.setItem("sandbox_key_" + name, v);
+      else localStorage.removeItem("sandbox_key_" + name);
+    }
+    const fbv = document.getElementById("k-firebase").value.trim();
+    if (fbv) {
+      try { JSON.parse(fbv); localStorage.setItem("sandbox_firebase_config", fbv); }
+      catch { document.getElementById("status").textContent = "⚠️ Firebase config is not valid JSON — not saved."; return; }
+    } else localStorage.removeItem("sandbox_firebase_config");
+    document.getElementById("status").textContent = "✅ Saved to this browser.";
+  }
+</script>
+</body>
+</html>
