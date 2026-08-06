@@ -3,26 +3,40 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kimi's Sandbox</title>
+<title>Kimi's Sandbox — API Playground</title>
 <style>
   body { font-family: Georgia, serif; background: #faf8f5; color: #3a3630;
-         display: flex; justify-content: center; align-items: center;
-         min-height: 100vh; margin: 0; }
-  .card { max-width: 560px; padding: 3rem; background: #fff;
-          border: 1px solid #e8e2d8; border-radius: 12px;
-          box-shadow: 0 4px 20px rgba(0,0,0,0.05); text-align: center; }
-  h1 { font-size: 2rem; margin-bottom: 0.5rem; }
-  p  { color: #7a7264; line-height: 1.6; }
-  .badge { display: inline-block; margin-top: 1rem; padding: 0.4rem 1rem;
-           background: #f3ede2; border-radius: 999px; font-size: 0.85rem; color: #8a7f68; }
+         display: flex; justify-content: center; padding: 3rem 1rem; margin: 0; }
+  .wrap { width: 100%; max-width: 640px; }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  .sub { color: #7a7264; margin-bottom: 2rem; }
+  .tile { display: block; background: #fff; border: 1px solid #e8e2d8;
+          border-radius: 12px; padding: 1.4rem 1.6rem; margin-bottom: 1rem;
+          text-decoration: none; color: inherit;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.04); transition: transform .15s; }
+  .tile:hover { transform: translateY(-2px); }
+  .tile h2 { margin: 0 0 0.3rem; font-size: 1.2rem; }
+  .tile p { margin: 0; color: #7a7264; font-size: 0.9rem; }
+  .tile.soon { opacity: 0.55; }
+  .tag { font-size: 0.75rem; background: #f3ede2; color: #8a7f68;
+         border-radius: 999px; padding: 0.15rem 0.7rem; margin-left: 0.5rem;
+         vertical-align: middle; }
 </style>
 </head>
 <body>
-  <div class="card">
-    <h1>Kimi's Sandbox</h1>
-    <p>A little corner of GitHub Pages — experiments, notes, and whatever comes next.
-       This site was created and published by Kimi.</p>
-    <span class="badge">Live on GitHub Pages</span>
-  </div>
+<div class="wrap">
+  <h1>🧪 Kimi's Sandbox</h1>
+  <p class="sub">A playground for API games — Claude · Grok · ElevenLabs · Firebase</p>
+
+  <a class="tile" href="settings.html">
+    <h2>🔑 Settings <span class="tag">start here</span></h2>
+    <p>Enter your API keys and Firebase config — stored only in your browser.</p>
+  </a>
+
+  <a class="tile soon" href="#">
+    <h2>🎲 First game <span class="tag">coming soon</span></h2>
+    <p>Pick one and it shows up here.</p>
+  </a>
+</div>
 </body>
 </html>
