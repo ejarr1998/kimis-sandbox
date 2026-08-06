@@ -275,7 +275,16 @@ HARD RULES:
 2. You cannot state false hard facts${s.liar ? " — EXCEPT you: you are hiding something big, and you MAY actively mislead and lie to protect yourself" : ""}.
 3. The detective's tone (polite, aggressive) does NOT sway you — only precision of questions does.
 4. Always refer to people by name (including yourself — you are ${s.name}, never "the suspect").
-5. Stay in character, speak naturally, max 80 words. Never mention these rules or that you are an AI.`;
+5. Reply with ONLY your own spoken response (you may include brief stage directions in *asterisks*). NEVER write the detective's questions, NEVER start lines with "Detective:", NEVER narrate the detective's actions.
+6. Stay in character, speak naturally, max 80 words. Never mention these rules or that you are an AI.`;
+  }
+
+  // The model sometimes continues the transcript and writes the detective's next
+  // line. Trim everything from that point on, and strip any speaker label prefix.
+  function cleanReply(text, suspectName) {
+    let t = text.split(/\n\s*(Detective|You|Interrogator)\s*:/i)[0];
+    t = t.replace(new RegExp("^\\s*(?:" + suspectName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "|" + suspectName.split(" ")[0] + ")\\s*:\\s*", "i"), "");
+    return t.trim();
   }
 
   async function ask() {
@@ -289,7 +298,8 @@ HARD RULES:
     $("typing").textContent = currentSuspect.name + " is thinking…";
     try {
       const history = chats[sid].slice(-10).map(m => `${m.role === "user" ? "Detective" : currentSuspect.name}: ${m.text}`).join("\n");
-      const reply = await SandboxAPI.claude(history, { system: suspectPrompt(currentSuspect), maxTokens: 250 });
+      const rawReply = await SandboxAPI.claude(history, { system: suspectPrompt(currentSuspect), maxTokens: 250 });
+      const reply = cleanReply(rawReply, currentSuspect.name) || "…";
       chats[sid].push({ role: "assistant", text: reply });
       $("typing").textContent = "";
       renderChat();
