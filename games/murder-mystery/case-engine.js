@@ -8,6 +8,51 @@
 
 const CaseEngine = (() => {
 
+  // Settings deck — one is dealt at random per case so the AI can't fall
+  // back on a favorite (it kept generating observatories).
+  const SETTINGS = [
+    "a 1920s jazz club on the riverfront",
+    "a remote lighthouse during a storm",
+    "the dining car of a luxury overnight train",
+    "a family vineyard estate at harvest time",
+    "a small-town radio station during a live broadcast",
+    "a traveling circus on its final night in town",
+    "a grand alpine hotel snowed in by an avalanche",
+    "an auction house the night of a record-breaking sale",
+    "a university library's restricted archives wing",
+    "a film studio backlot during a night shoot",
+    "an art gallery on the eve of a controversial exhibition",
+    "a fishing harbor cannery at the end of the season",
+    "a mountain sanatorium in the 1930s",
+    "a botanical garden's glass conservatory gala",
+    "an old printing press warehouse",
+    "a chess tournament at a seaside resort",
+    "a monastery famous for its illuminated manuscripts",
+    "a speakeasy hidden behind a barbershop",
+    "an opera house on opening night",
+    "a research station in the Antarctic winter",
+    "a riverboat casino crossing state lines",
+    "a fashion house the week of the big show",
+    "a natural history museum's new dinosaur wing",
+    "a radio telescope array in the desert",
+    "a boarding school over a foggy autumn weekend",
+    "a hot springs resort in the mountains",
+    "an antique map dealership's private vault",
+    "a community theater's dress rehearsal",
+    "a vineyard harvest festival in the 1950s",
+    "a clockmaker's shop filled with antique timepieces",
+    "a Grand Prix pit lane in the 1960s",
+    "a small island reachable only by tide",
+    "a royal pastry competition's final day",
+    "an observatory on a remote mountain peak",
+    "a newspaper office the night of a big scoop",
+    "a perfume atelier with a secret formula",
+    "a ski lodge cut off by a blizzard",
+    "an aquarium's after-hours donor dinner",
+    "a lighthouse keeper's retirement party",
+    "a traveling book fair's closing banquet"
+  ];
+
   const CASE_SCHEMA = `{
   "title": "string — evocative case title",
   "setting": "string — 2-3 sentence world/location description",
@@ -44,9 +89,12 @@ const CaseEngine = (() => {
   ]
 }`;
 
-  const GEN_PROMPT = `You are a master mystery writer. Generate ONE complete, original murder mystery case as STRICT JSON (no markdown fences, no commentary) matching this schema exactly:
+  const GEN_PROMPT = (setting) => `You are a master mystery writer. Generate ONE complete, original murder mystery case as STRICT JSON (no markdown fences, no commentary) matching this schema exactly:
 
 ${CASE_SCHEMA}
+
+THE SETTING FOR THIS CASE IS ALREADY CHOSEN — you MUST use it: ${setting}.
+Build everything (victim, suspects, weapons, locations, evidence) to fit that world.
 
 Requirements:
 - Exactly 6 suspects. Exactly ONE is the killer (liar: true). One OTHER suspect may also be a liar about something unrelated (a red herring). Everyone else lies only by omission.
@@ -56,8 +104,7 @@ Requirements:
 - Suspects must NEVER need to reference people outside the 6 suspects and the victim — if a fact needs a source, it belongs in an evidence item, not an invented bystander.
 - Red herrings welcome, but they must be resolvable as innocent.
 - NAMES: each character has exactly ONE full name, used identically in every field of the document. Double-check every mention before finishing — a name spelled two ways (e.g. "Frost" vs "Voss") is a fatal defect.
-- IMPORTANT: randomize ordering — do NOT put the killer first among suspects, and do NOT put the true weapon/location first in their lists.
-- Victim era/setting: pick something atmospheric (1920s jazz club, remote lighthouse, luxury train, vineyard estate, small-town radio station...). Be original.`;
+- IMPORTANT: randomize ordering — do NOT put the killer first among suspects, and do NOT put the true weapon/location first in their lists.`;
 
   const VALIDATE_PROMPT = (caseJson) => `You are a ruthless logic auditor for murder mysteries. Here is a case file:
 
@@ -104,8 +151,9 @@ Rules: use fixes[] for name/consistency repairs (max 6), patches[] for solvabili
 
   // ---------- Stage 1: generate ----------
   async function generateCase(onStatus) {
-    onStatus?.("🖋 Claude is writing the case…");
-    const raw = await SandboxAPI.claude(GEN_PROMPT, { maxTokens: 4500 });
+    const setting = SETTINGS[Math.floor(Math.random() * SETTINGS.length)];
+    onStatus?.(`🖋 Claude is writing the case… (${setting})`);
+    const raw = await SandboxAPI.claude(GEN_PROMPT(setting), { maxTokens: 4500 });
     const caseFile = extractJson(raw);
     caseFile.suspects.forEach(s => { s.portrait = null; });
     caseFile.evidence = caseFile.evidence || [];
