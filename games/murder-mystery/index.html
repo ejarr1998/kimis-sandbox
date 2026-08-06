@@ -55,8 +55,10 @@
     color: var(--paper); font-family: inherit; font-size: 1rem;
   }
   input:focus { outline: 1px solid var(--brass); }
+  input::placeholder { color: #6b6152; }
   .code-input { text-transform: uppercase; letter-spacing: 0.5em; text-align: center;
     font-family: "Special Elite", monospace; font-size: 1.4rem; }
+  .field-hint { font-size: 0.78rem; color: var(--mute); font-style: italic; margin: 0.35rem 0 0; }
 
   .stamp-btn {
     width: 100%; margin-top: 0.8rem;
@@ -92,6 +94,9 @@
 
   <div class="panel">
     <div class="panel-title">Open a new case file</div>
+    <input id="setting" maxlength="140"
+      placeholder="Request a setting (optional) — e.g. a Taco Bell at 2am">
+    <div class="field-hint">Leave blank and the division assigns a random case file. Any era, any place.</div>
     <button class="stamp-btn" id="host" onclick="hostCase()">🖋 Generate a Mystery</button>
     <div id="status"></div>
   </div>
@@ -115,9 +120,10 @@
 
   async function hostCase() {
     const btn = document.getElementById("host");
+    const setting = document.getElementById("setting").value.trim();
     btn.disabled = true;
     try {
-      let caseFile = await CaseEngine.generateCase(status);
+      let caseFile = await CaseEngine.generateCase(status, setting);
       const result = await CaseEngine.validateAndPatch(caseFile, status);
       caseFile = result.caseFile;
       await CaseEngine.generatePortraits(caseFile, status);
