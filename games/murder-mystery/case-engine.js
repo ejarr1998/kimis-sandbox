@@ -65,7 +65,7 @@ ${JSON.stringify(caseJson)}
 
 Perform THREE audits:
 
-AUDIT A — Name consistency: extract the canonical full name of every suspect and the victim. Search the ENTIRE document (all knows, secrets, alibis, evidence, keyClues, recap, openingScene) for any mention that uses a DIFFERENT or MISSPELLED variant of those names (e.g. "Voss" when the roster says "Frost", "Dr. Rousseau" when the roster says "Dr. Rousseau-Lane"). Any near-match surname that differs from the canonical one counts as a defect. Note: a character being referred to by first name, last name, or title+last name is fine as long as the spelling matches canon.
+AUDIT A — Name consistency: extract the canonical full name of every suspect and the victim. Search the ENTIRE document (all knows, secrets, alibis, evidence, keyClues, recap, openingScene) for any mention that uses a DIFFERENT or MISSPELLED variant of those names (e.g. "Voss" when the roster says "Frost"). Any near-match surname that differs from the canonical one counts as a defect. Note: a character being referred to by first name, last name, or title+last name is fine as long as the spelling matches canon.
 
 AUDIT B — World closure: no suspect's scripted facts may depend on people outside the suspect roster and victim.
 
@@ -186,7 +186,7 @@ Rules: use fixes[] for name/consistency repairs (max 6), patches[] for solvabili
   // ---------- Firestore ----------
   function makeCode() {
     const letters = "ABCDEFGHJKMNPQRSTUVWXYZ";
-    return Array.from({ length: 4 }, () => letters[Math.floor(Math.random() * letters.length)].join ? letters[Math.floor(Math.random() * letters.length)] : "").join("");
+    return Array.from({ length: 4 }, () => letters[Math.floor(Math.random() * letters.length)]).join("");
   }
 
   async function saveCase(caseFile) {
