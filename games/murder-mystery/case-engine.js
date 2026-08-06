@@ -9,7 +9,8 @@
 const CaseEngine = (() => {
 
   // Settings deck — one is dealt at random per case so the AI can't fall
-  // back on a favorite (it kept generating observatories).
+  // back on a favorite (it kept generating observatories). A host can
+  // override the deck by requesting their own setting.
   const SETTINGS = [
     "a 1920s jazz club on the riverfront",
     "a remote lighthouse during a storm",
@@ -57,7 +58,7 @@ const CaseEngine = (() => {
   "title": "string — evocative case title",
   "setting": "string — 2-3 sentence world/location description",
   "victim": { "name": "string", "description": "string — who they were, how found" },
-  "artStyle": "string — ONE consistent portrait style, e.g. 'moody noir pencil sketch, dramatic shadows, muted sepia tones'. Applied verbatim to every portrait.",
+  "artStyle": "string — ONE consistent portrait style that fits this case's era and mood, e.g. 'moody noir pencil sketch, dramatic shadows, muted sepia tones' for a period case, or 'grainy smartphone photo, fluorescent lighting, desaturated colors' for a modern case. Applied verbatim to every portrait.",
   "solution": {
     "killerId": "string — id of the true killer from suspects",
     "weapon": "string", "location": "string", "motive": "string",
@@ -89,12 +90,12 @@ const CaseEngine = (() => {
   ]
 }`;
 
-  const GEN_PROMPT = (setting) => `You are a master mystery writer. Generate ONE complete, original murder mystery case as STRICT JSON (no markdown fences, no commentary) matching this schema exactly:
+  const GEN_PROMPT = (setting, custom) => `You are a master mystery writer. Generate ONE complete, original murder mystery case as STRICT JSON (no markdown fences, no commentary) matching this schema exactly:
 
 ${CASE_SCHEMA}
 
 THE SETTING FOR THIS CASE IS ALREADY CHOSEN — you MUST use it: ${setting}.
-Build everything (victim, suspects, weapons, locations, evidence) to fit that world.
+Build everything (victim, suspects, weapons, locations, evidence, era, tone, artStyle) to fit that world.${custom ? " This setting was personally requested by the host — honor its specific details (brands, era, place) faithfully and lean into what makes it distinctive." : ""}
 
 Requirements:
 - Exactly 6 suspects. Exactly ONE is the killer (liar: true). One OTHER suspect may also be a liar about something unrelated (a red herring). Everyone else lies only by omission.
@@ -150,11 +151,14 @@ Rules: use fixes[] for name/consistency repairs (max 6), patches[] for solvabili
   }
 
   // ---------- Stage 1: generate ----------
-  async function generateCase(onStatus) {
-    const setting = SETTINGS[Math.floor(Math.random() * SETTINGS.length)];
+  // customSetting: optional host-requested setting; overrides the random deck.
+  async function generateCase(onStatus, customSetting) {
+    const custom = (customSetting || "").trim();
+    const setting = custom || SETTINGS[Math.floor(Math.random() * SETTINGS.length)];
     onStatus?.(`🖋 Claude is writing the case… (${setting})`);
-    const raw = await SandboxAPI.claude(GEN_PROMPT(setting), { maxTokens: 4500 });
+    const raw = await SandboxAPI.claude(GEN_PROMPT(setting, !!custom), { maxTokens: 4500 });
     const caseFile = extractJson(raw);
+    caseFile.requestedSetting = custom || null;
     caseFile.suspects.forEach(s => { s.portrait = null; });
     caseFile.evidence = caseFile.evidence || [];
     // Never trust the generator's ordering — shuffle lists so answers don't leak by position.
