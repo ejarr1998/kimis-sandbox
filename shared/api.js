@@ -71,9 +71,10 @@ const SandboxAPI = (() => {
     return data.choices[0].message.content;
   }
 
-  // ---------- Grok image (xAI) ----------
+  // ---------- Grok image (xAI Imagine API) ----------
+  // grok-2-image was deprecated Feb 2026; grok-imagine-image is the current model.
   // Returns an object: { url, revised_prompt }
-  async function grokImage(prompt, { model = "grok-2-image", n = 1 } = {}) {
+  async function grokImage(prompt, { model = "grok-imagine-image", n = 1 } = {}) {
     const res = await fetch("https://api.x.ai/v1/images/generations", {
       method: "POST",
       headers: {
