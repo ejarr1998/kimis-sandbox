@@ -21,18 +21,27 @@
   button { margin-top: 1.5rem; padding: 0.7rem 1.6rem; background: #8a7f68;
           color: #fff; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; }
   button:hover { background: #6f6552; }
+  button:disabled { opacity: 0.6; cursor: wait; }
+  .sync-btn { margin-top: 0.6rem; margin-right: 0.5rem; }
   .note { color: #7a7264; font-size: 0.85rem; line-height: 1.5; }
   .hint { font-weight: normal; color: #a39a86; font-size: 0.8rem; }
   #status { margin-top: 1rem; color: #4a7a4a; }
+  #sync-status { margin-top: 0.7rem; font-size: 0.9rem; }
   a { color: #8a7f68; }
 </style>
 </head>
 <body>
 <div class="card">
   <h1>🔑 Sandbox Settings</h1>
-  <p class="note">Keys are stored <b>only in this browser</b> (localStorage) and are never
-     sent anywhere except directly to the respective API. They are <b>not</b> in the repo.
-     Empty fields are simply unused.</p>
+  <p class="note">Keys are stored <b>in this browser</b> (localStorage) and never committed to the repo.
+     Use cloud sync below to carry them across devices.</p>
+
+  <h2>☁️ Sync across devices</h2>
+  <label for="passphrase">Sync passphrase <span class="hint">— encrypts keys before upload; never stored</span></label>
+  <input id="passphrase" type="password" placeholder="pick a passphrase you'll remember">
+  <button class="sync-btn" id="push-btn" onclick="pushKeys()">⬆ Upload (encrypted)</button>
+  <button class="sync-btn" id="pull-btn" onclick="pullKeys()">⬇ Download to this device</button>
+  <div id="sync-status" class="note"></div>
 
   <h2>Core</h2>
   <label for="k-claude">Claude (Anthropic) <span class="hint">sk-ant-… · console.anthropic.com</span></label>
@@ -83,6 +92,7 @@
   <div id="status"></div>
   <p class="note" style="margin-top:1.5rem"><a href="index.html">← Back to the hub</a></p>
 </div>
+<script src="shared/api.js"></script>
 <script>
   const fields = {
     claude: "k-claude", grok: "k-grok", elevenlabs: "k-eleven",
@@ -90,12 +100,15 @@
     mistral: "k-mistral", replicate: "k-replicate", fal: "k-fal",
     deepgram: "k-deepgram", tavily: "k-tavily", brave: "k-brave"
   };
-  for (const [name, id] of Object.entries(fields)) {
-    const v = localStorage.getItem("sandbox_key_" + name);
-    if (v) document.getElementById(id).value = v;
+  function loadFields() {
+    for (const [name, id] of Object.entries(fields)) {
+      const v = localStorage.getItem("sandbox_key_" + name);
+      if (v) document.getElementById(id).value = v;
+    }
+    const fb = localStorage.getItem("sandbox_firebase_config");
+    if (fb) document.getElementById("k-firebase").value = fb;
   }
-  const fb = localStorage.getItem("sandbox_firebase_config");
-  if (fb) document.getElementById("k-firebase").value = fb;
+  loadFields();
 
   function save() {
     for (const [name, id] of Object.entries(fields)) {
@@ -109,6 +122,79 @@
       catch { document.getElementById("status").textContent = "⚠️ Firebase config is not valid JSON — not saved."; return; }
     } else localStorage.removeItem("sandbox_firebase_config");
     document.getElementById("status").textContent = "✅ All keys saved to this browser.";
+  }
+
+  // ---------- encrypted cloud sync (AES-GCM + PBKDF2, passphrase never leaves the device) ----------
+  const enc = new TextEncoder(), dec = new TextDecoder();
+  const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+  const unb64 = (s) => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+
+  async function deriveKey(passphrase, salt) {
+    const base = await crypto.subtle.importKey("raw", enc.encode(passphrase), "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey(
+      { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
+      base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  }
+
+  function collectKeys() {
+    save(); // make sure localStorage reflects the form
+    const bundle = {};
+    for (const name of Object.keys(fields)) {
+      const v = localStorage.getItem("sandbox_key_" + name);
+      if (v) bundle[name] = v;
+    }
+    return bundle;
+  }
+
+  function getPassphrase() {
+    const p = document.getElementById("passphrase").value;
+    if (!p) { document.getElementById("sync-status").textContent = "⚠️ Enter a sync passphrase first."; return null; }
+    return p;
+  }
+
+  async function pushKeys() {
+    const p = getPassphrase(); if (!p) return;
+    const btn = document.getElementById("push-btn"); btn.disabled = true;
+    const st = document.getElementById("sync-status");
+    st.textContent = "Encrypting & uploading…";
+    try {
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const key = await deriveKey(p, salt);
+      const data = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key,
+        enc.encode(JSON.stringify(collectKeys())));
+      await SandboxAPI.firebaseApp();
+      await firebase.firestore().collection("sync").doc("keys").set({
+        salt: b64(salt), iv: b64(iv), data: b64(data),
+        updatedAt: new Date().toISOString()
+      });
+      st.textContent = "✅ Uploaded (encrypted). On your other device: enter the same passphrase → Download.";
+    } catch (e) { st.textContent = "❌ " + e.message; }
+    btn.disabled = false;
+  }
+
+  async function pullKeys() {
+    const p = getPassphrase(); if (!p) return;
+    const btn = document.getElementById("pull-btn"); btn.disabled = true;
+    const st = document.getElementById("sync-status");
+    st.textContent = "Downloading & decrypting…";
+    try {
+      await SandboxAPI.firebaseApp();
+      const snap = await firebase.firestore().collection("sync").doc("keys").get();
+      if (!snap.exists) throw new Error("No synced keys found — upload from your other device first.");
+      const d = snap.data();
+      const key = await deriveKey(p, unb64(d.salt));
+      const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(d.iv) }, key, unb64(d.data));
+      const bundle = JSON.parse(dec.decode(plain));
+      for (const [name, v] of Object.entries(bundle)) {
+        localStorage.setItem("sandbox_key_" + name, v);
+      }
+      loadFields();
+      st.textContent = "✅ " + Object.keys(bundle).length + " keys restored to this device (synced " + d.updatedAt + ").";
+    } catch (e) {
+      st.textContent = "❌ " + (e.name === "OperationError" ? "Wrong passphrase (or corrupted data)." : e.message);
+    }
+    btn.disabled = false;
   }
 </script>
 </body>
