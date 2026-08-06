@@ -22,6 +22,14 @@ const CaseEngine = (() => {
   "locations": ["string — 5-7 plausible locations, including the true one"],
   "keyClues": ["string — the 5-8 facts a sharp detective MUST uncover to solve it"],
   "openingScene": "string — 120-word second-person narration setting the scene for the detective",
+  "evidence": [
+    {
+      "id": "short lowercase slug, e.g. 'call-log'",
+      "name": "string — examinable object, e.g. 'Telephone call log', 'The victim's notebook'",
+      "description": "string — what the detective sees when examining it",
+      "reveals": ["string — 1-3 concrete facts this evidence establishes"]
+    }
+  ],
   "suspects": [
     {
       "id": "short lowercase slug, e.g. 'mara'",
@@ -42,8 +50,10 @@ ${CASE_SCHEMA}
 
 Requirements:
 - Exactly 6 suspects. Exactly ONE is the killer (liar: true). One OTHER suspect may also be a liar about something unrelated (a red herring). Everyone else lies only by omission.
-- The case MUST be solvable: the killer's guilt must be deducible from facts inside suspects' "knows"/"secrets" — e.g. a broken alibi, knowledge only the killer would have, a contradicting witness.
+- Exactly 3-4 evidence items: physical objects the detective can examine (documents, the body, objects at the scene). At least ONE keyClue must come from evidence rather than from any suspect, so interrogation alone is never enough.
+- The case MUST be solvable: the killer's guilt must be deducible from facts inside suspects' "knows"/"secrets" plus evidence "reveals" — e.g. a broken alibi, knowledge only the killer would have, a contradicting witness, a damning document.
 - Distribute clues so at least 3 different suspects hold pieces of the solution.
+- Suspects must NEVER need to reference people outside the 6 suspects and the victim — if a fact needs a source, it belongs in an evidence item, not an invented bystander.
 - Red herrings welcome, but they must be resolvable as innocent.
 - Victim era/setting: pick something atmospheric (1920s jazz club, remote lighthouse, luxury train, vineyard estate, small-town radio station...). Be original.`;
 
@@ -51,15 +61,16 @@ Requirements:
 
 ${JSON.stringify(caseJson)}
 
-Simulate a sharp detective who can only learn facts in suspects' "knows" and "secrets" (secrets only via very pointed questions). Answer STRICT JSON:
+Simulate a sharp detective who can only learn facts in suspects' "knows"/"secrets" (secrets only via very pointed questions) and evidence items' "reveals". Answer STRICT JSON:
 {
   "solvable": true/false,
   "issues": ["string — each logical problem: unreachable clue, contradiction, insufficient distinguishing evidence, etc."],
   "patches": [
-    { "suspectId": "string", "addKnowledge": "string — ONE fact to inject into that suspect's knows[] that fixes a gap" }
+    { "suspectId": "string or null", "evidenceId": "string or null",
+      "addKnowledge": "string — ONE fact to inject into that suspect's knows[] or that evidence's reveals[] to fix a gap" }
   ]
 }
-Rules: solvable=true ONLY if the killer, weapon AND location can all be deduced without guessing. If small fixes suffice, give patches (max 3). If the case is fundamentally broken, set solvable=false with empty patches.`;
+Rules: solvable=true ONLY if the killer, weapon AND location can all be deduced without guessing. Also verify: no suspect's scripted facts depend on people outside the suspect roster and victim; every keyClue is reachable from some knows/secrets/reveals entry. If small fixes suffice, give patches (max 3, each naming suspectId OR evidenceId). If the case is fundamentally broken, set solvable=false with empty patches.`;
 
   function extractJson(text) {
     const m = text.match(/\{[\s\S]*\}/);
@@ -70,9 +81,10 @@ Rules: solvable=true ONLY if the killer, weapon AND location can all be deduced 
   // ---------- Stage 1: generate ----------
   async function generateCase(onStatus) {
     onStatus?.("🖋 Claude is writing the case…");
-    const raw = await SandboxAPI.claude(GEN_PROMPT, { maxTokens: 4000 });
+    const raw = await SandboxAPI.claude(GEN_PROMPT, { maxTokens: 4500 });
     const caseFile = extractJson(raw);
     caseFile.suspects.forEach(s => { s.portrait = null; });
+    caseFile.evidence = caseFile.evidence || [];
     return caseFile;
   }
 
@@ -88,8 +100,13 @@ Rules: solvable=true ONLY if the killer, weapon AND location can all be deduced 
       }
       onStatus?.(`🩹 Patching: ${verdict.patches.length} clue fix(es)…`);
       for (const p of verdict.patches) {
-        const s = caseFile.suspects.find(x => x.id === p.suspectId);
-        if (s && p.addKnowledge) s.knows.push(p.addKnowledge);
+        if (p.suspectId) {
+          const s = caseFile.suspects.find(x => x.id === p.suspectId);
+          if (s && p.addKnowledge) s.knows.push(p.addKnowledge);
+        } else if (p.evidenceId) {
+          const ev = caseFile.evidence.find(x => x.id === p.evidenceId);
+          if (ev && p.addKnowledge) ev.reveals.push(p.addKnowledge);
+        }
       }
     }
     throw new Error("Case still not solvable after 3 patch attempts.");
@@ -142,7 +159,7 @@ Rules: solvable=true ONLY if the killer, weapon AND location can all be deduced 
       .collection("players").doc(detectiveName.trim());
     const snap = await ref.get();
     if (!snap.exists) {
-      await ref.set({ joinedAt: new Date().toISOString(), clues: [], chats: {}, accusation: null });
+      await ref.set({ joinedAt: new Date().toISOString(), clues: [], chats: {}, examined: [], accusation: null });
     }
     return ref;
   }
