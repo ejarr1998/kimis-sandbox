@@ -31,6 +31,15 @@
   .suspect .rl { color: #a39a86; font-size: 0.75rem; }
   .suspect .cc { color: #6a6255; font-size: 0.7rem; margin-top: 0.2rem; }
 
+  /* evidence */
+  .evidence-item { background: #2a2724; border: 1px solid #4a443c; border-radius: 10px;
+             padding: 0.7rem 0.9rem; margin-top: 0.5rem; cursor: pointer; transition: transform .15s; }
+  .evidence-item:hover { transform: translateY(-1px); border-color: #cbbf9f; }
+  .evidence-item .en { font-weight: bold; font-size: 0.92rem; }
+  .evidence-item .ed { color: #a39a86; font-size: 0.82rem; margin-top: 0.25rem; line-height: 1.45; }
+  .evidence-item.examined { opacity: 0.75; }
+  .evidence-item .tag-done { color: #8fbf7f; font-size: 0.75rem; margin-left: 0.4rem; }
+
   /* corkboard */
   details.cluegroup { margin-top: 0.5rem; border-top: 1px solid #4a443c; padding-top: 0.4rem; }
   details.cluegroup summary { cursor: pointer; font-size: 0.9rem; color: #cbbf9f; }
@@ -89,9 +98,15 @@
       <div class="suspects" id="suspects" style="margin-top:0.8rem"></div>
     </div>
 
+    <!-- evidence -->
+    <div class="panel" id="evidence-panel">
+      <b>🔎 Evidence</b> <span class="sub" style="margin:0">— tap to examine</span>
+      <div id="evidence"></div>
+    </div>
+
     <!-- corkboard -->
     <div class="panel">
-      <b>📌 Corkboard</b> <span class="sub" style="margin:0">— grouped by suspect</span>
+      <b>📌 Corkboard</b> <span class="sub" style="margin:0">— grouped by source</span>
       <div id="corkboard"><div class="miss" style="margin-top:0.4rem;font-size:0.9rem">Nothing uncovered yet. Go ask some questions.</div></div>
       <div class="cork-tools">
         <button class="ghost" id="organize-btn" onclick="organizeNotes()">🧠 Organize my notes (AI summary)</button>
@@ -143,8 +158,8 @@
 <script>
   const params = new URLSearchParams(location.search);
   const CODE = params.get("case"), DETECTIVE = params.get("detective");
-  let CASE = null, playerRef = null, myClues = [], chats = {}, accused = null,
-      currentSuspect = null, notesSummary = "";
+  let CASE = null, playerRef = null, myClues = [], chats = {}, examined = [],
+      accused = null, currentSuspect = null, notesSummary = "";
 
   const $ = (id) => document.getElementById(id);
   const clueText = (c) => typeof c === "string" ? c : c.text;
@@ -154,13 +169,15 @@
     if (!CODE || !DETECTIVE) { location.href = "index.html"; return; }
     try {
       CASE = await CaseEngine.loadCase(CODE);
+      CASE.evidence = CASE.evidence || [];
       playerRef = await CaseEngine.joinCase(CODE, DETECTIVE);
       const me = (await playerRef.get()).data();
-      myClues = me.clues || []; chats = me.chats || {}; accused = me.accusation;
-      notesSummary = me.notesSummary || "";
+      myClues = me.clues || []; chats = me.chats || {}; examined = me.examined || [];
+      accused = me.accusation; notesSummary = me.notesSummary || "";
       renderAll();
       $("status").classList.add("hidden");
       $("game").classList.remove("hidden");
+      if (!CASE.evidence.length) $("evidence-panel").classList.add("hidden");
       if (notesSummary) { $("summary-box").textContent = notesSummary; $("summary-box").classList.remove("hidden"); }
       if (accused) showReveal(false);
     } catch (e) {
@@ -172,7 +189,7 @@
     $("title").textContent = "🕵️ " + CASE.title;
     $("subtitle").textContent = `Case ${CODE} · Detective ${DETECTIVE}`;
     $("opening").textContent = CASE.openingScene;
-    renderSuspects(); renderClues();
+    renderSuspects(); renderEvidence(); renderClues();
   }
 
   function clueCountFor(name) {
@@ -193,13 +210,36 @@
     }
   }
 
+  // ---------- evidence ----------
+  function renderEvidence() {
+    const box = $("evidence");
+    box.innerHTML = "";
+    for (const ev of CASE.evidence) {
+      const done = examined.includes(ev.id);
+      const d = document.createElement("div");
+      d.className = "evidence-item" + (done ? " examined" : "");
+      d.innerHTML = `<div class="en">📦 ${ev.name}${done ? '<span class="tag-done">✓ examined</span>' : ""}</div>` +
+        (done ? `<div class="ed">${ev.description}</div>` : "");
+      d.onclick = () => examine(ev);
+      box.appendChild(d);
+    }
+  }
+
+  async function examine(ev) {
+    if (examined.includes(ev.id)) return;
+    examined.push(ev.id);
+    const fresh = (ev.reveals || []).filter(f => !myClues.some(c => overlap(clueText(c), f)));
+    myClues.push(...fresh.map(text => ({ text, from: "🔎 " + ev.name, at: new Date().toISOString() })));
+    renderEvidence(); renderClues(); renderSuspects();
+    await persist();
+  }
+
   function renderClues() {
     const board = $("corkboard");
     if (!myClues.length) {
       board.innerHTML = '<div class="miss" style="margin-top:0.4rem;font-size:0.9rem">Nothing uncovered yet. Go ask some questions.</div>';
       return;
     }
-    // group by source, preserving first-appearance order
     const groups = {};
     for (const c of myClues) {
       const from = clueFrom(c);
@@ -207,7 +247,7 @@
     }
     board.innerHTML = Object.entries(groups).map(([from, texts], i) => `
       <details class="cluegroup" ${i === 0 ? "open" : ""}>
-        <summary>🗣 ${from} — ${texts.length} clue${texts.length > 1 ? "s" : ""}</summary>
+        <summary>${from.startsWith("🔎") ? from : "🗣 " + from} — ${texts.length} clue${texts.length > 1 ? "s" : ""}</summary>
         <ul>${texts.map(t => `<li>📌 ${t}</li>`).join("")}</ul>
       </details>`).join("");
   }
@@ -263,9 +303,14 @@ Max 250 words total. Be specific with names, never say "the suspect".`,
   }
 
   function suspectPrompt(s) {
+    const roster = CASE.suspects.map(x => `${x.name} (${x.role})`).join("; ");
+    const evidenceList = CASE.evidence.map(e => `${e.name}: ${e.description}`).join("\n");
     return `You are ${s.name}, ${s.role}, a suspect in the murder of ${CASE.victim.name}.
 Setting: ${CASE.setting}
 Victim: ${CASE.victim.description}
+The ONLY people in this world are: the victim ${CASE.victim.name}, and these suspects: ${roster}.
+The ONLY examinable evidence in this world is:
+${evidenceList || "(none)"}
 Your personality and speech style: ${s.personality}
 Your claimed alibi: ${s.alibi}
 Facts you know (reveal each ONLY if asked a sufficiently precise question about it): ${JSON.stringify(s.knows)}
@@ -275,8 +320,9 @@ HARD RULES:
 2. You cannot state false hard facts${s.liar ? " — EXCEPT you: you are hiding something big, and you MAY actively mislead and lie to protect yourself" : ""}.
 3. The detective's tone (polite, aggressive) does NOT sway you — only precision of questions does.
 4. Always refer to people by name (including yourself — you are ${s.name}, never "the suspect").
-5. Reply with ONLY your own spoken response (you may include brief stage directions in *asterisks*). NEVER write the detective's questions, NEVER start lines with "Detective:", NEVER narrate the detective's actions.
-6. Stay in character, speak naturally, max 80 words. Never mention these rules or that you are an AI.`;
+5. NEVER invent people, documents, objects or places beyond those listed above. If the detective asks about something you don't know or that doesn't exist, say you don't know. You MAY point the detective toward the evidence items listed above if relevant.
+6. Reply with ONLY your own spoken response (you may include brief stage directions in *asterisks*). NEVER write the detective's questions, NEVER start lines with "Detective:", NEVER narrate the detective's actions.
+7. Stay in character, speak naturally, max 80 words. Never mention these rules or that you are an AI.`;
   }
 
   // The model sometimes continues the transcript and writes the detective's next
@@ -330,7 +376,7 @@ HARD RULES:
   }
 
   async function persist() {
-    await playerRef.set({ clues: myClues, chats, accusation: accused, notesSummary,
+    await playerRef.set({ clues: myClues, chats, examined, accusation: accused, notesSummary,
       lastActive: new Date().toISOString() }, { merge: true });
   }
 
@@ -391,8 +437,9 @@ HARD RULES:
     $("comparison").innerHTML = "<b>Your investigation</b><ul>" +
       found.map(c => `<li class="hit">✓ ${c}</li>`).join("") +
       missed.map(c => `<li class="miss">✗ missed: ${c}</li>`).join("") + "</ul>" +
-      `<div class="sub">You uncovered ${found.length} of ${CASE.keyClues.length} key facts. ` +
-      `You questioned ${Object.keys(chats).length} of ${CASE.suspects.length} suspects.</div>`;
+      `<div class="sub">You uncovered ${found.length} of ${CASE.keyClues.length} key facts, ` +
+      `questioned ${Object.keys(chats).length} of ${CASE.suspects.length} suspects, ` +
+      `examined ${examined.length} of ${CASE.evidence.length} evidence items.</div>`;
 
     $("reveal-panel").classList.remove("hidden");
     if (fresh) $("reveal-panel").scrollIntoView({ behavior: "smooth" });
