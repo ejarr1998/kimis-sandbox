@@ -11,7 +11,10 @@
           border: 1px solid #e8e2d8; border-radius: 12px;
           box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
   h1 { font-size: 1.6rem; margin-top: 0; }
-  label { display: block; margin: 1.2rem 0 0.3rem; font-weight: bold; }
+  h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.06em;
+       color: #8a7f68; margin: 2rem 0 0.5rem; border-bottom: 1px solid #e8e2d8;
+       padding-bottom: 0.3rem; }
+  label { display: block; margin: 1rem 0 0.3rem; font-weight: bold; font-size: 0.95rem; }
   input, textarea { width: 100%; box-sizing: border-box; padding: 0.6rem;
           border: 1px solid #d8d0c0; border-radius: 8px; font-size: 0.95rem;
           font-family: monospace; }
@@ -19,6 +22,7 @@
           color: #fff; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; }
   button:hover { background: #6f6552; }
   .note { color: #7a7264; font-size: 0.85rem; line-height: 1.5; }
+  .hint { font-weight: normal; color: #a39a86; font-size: 0.8rem; }
   #status { margin-top: 1rem; color: #4a7a4a; }
   a { color: #8a7f68; }
 </style>
@@ -27,28 +31,65 @@
 <div class="card">
   <h1>🔑 Sandbox Settings</h1>
   <p class="note">Keys are stored <b>only in this browser</b> (localStorage) and are never
-     sent anywhere except directly to the respective API. They are <b>not</b> in the repo.</p>
+     sent anywhere except directly to the respective API. They are <b>not</b> in the repo.
+     Empty fields are simply unused.</p>
 
-  <label for="k-claude">Claude API key (Anthropic)</label>
+  <h2>Core</h2>
+  <label for="k-claude">Claude (Anthropic) <span class="hint">sk-ant-… · console.anthropic.com</span></label>
   <input id="k-claude" type="password" placeholder="sk-ant-...">
 
-  <label for="k-grok">Grok API key (xAI)</label>
+  <label for="k-grok">Grok (xAI) <span class="hint">xai-… · console.x.ai</span></label>
   <input id="k-grok" type="password" placeholder="xai-...">
 
-  <label for="k-eleven">ElevenLabs API key</label>
+  <label for="k-eleven">ElevenLabs (TTS + SFX) <span class="hint">UUID · elevenlabs.io → profile</span></label>
   <input id="k-eleven" type="password" placeholder="...">
 
-  <label for="k-firebase">Firebase config (JSON)</label>
-  <textarea id="k-firebase" rows="6" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...",...}'></textarea>
-  <p class="note">Paste the <code>firebaseConfig</code> object from your Firebase console
-     (Project settings → Your apps → Web app).</p>
+  <h2>More brains</h2>
+  <label for="k-gemini">Google Gemini <span class="hint">AIza… · aistudio.google.com</span></label>
+  <input id="k-gemini" type="password" placeholder="AIza...">
 
-  <button onclick="save()">Save</button>
+  <label for="k-groq">Groq (fast inference + Whisper) <span class="hint">gsk_… · console.groq.com</span></label>
+  <input id="k-groq" type="password" placeholder="gsk_...">
+
+  <label for="k-deepseek">DeepSeek <span class="hint">sk-… · platform.deepseek.com</span></label>
+  <input id="k-deepseek" type="password" placeholder="sk-...">
+
+  <label for="k-mistral">Mistral <span class="hint">console.mistral.ai</span></label>
+  <input id="k-mistral" type="password" placeholder="...">
+
+  <h2>Media &amp; models</h2>
+  <label for="k-replicate">Replicate <span class="hint">r8_… · replicate.com</span></label>
+  <input id="k-replicate" type="password" placeholder="r8_...">
+
+  <label for="k-fal">fal.ai <span class="hint">fal.ai → dashboard</span></label>
+  <input id="k-fal" type="password" placeholder="...">
+
+  <h2>Voice &amp; ears</h2>
+  <label for="k-deepgram">Deepgram (speech-to-text) <span class="hint">console.deepgram.com</span></label>
+  <input id="k-deepgram" type="password" placeholder="...">
+
+  <h2>Search &amp; knowledge</h2>
+  <label for="k-tavily">Tavily (web search) <span class="hint">tvly-… · tavily.com</span></label>
+  <input id="k-tavily" type="password" placeholder="tvly-...">
+
+  <label for="k-brave">Brave Search <span class="hint">BSA… · brave.com/search/api</span></label>
+  <input id="k-brave" type="password" placeholder="BSA...">
+
+  <h2>Advanced</h2>
+  <label for="k-firebase">Firebase config override (JSON) <span class="hint">optional — already baked into the code</span></label>
+  <textarea id="k-firebase" rows="4" placeholder='{"apiKey":"...",...}'></textarea>
+
+  <button onclick="save()">Save all</button>
   <div id="status"></div>
   <p class="note" style="margin-top:1.5rem"><a href="index.html">← Back to the hub</a></p>
 </div>
 <script>
-  const fields = { claude: "k-claude", grok: "k-grok", elevenlabs: "k-eleven" };
+  const fields = {
+    claude: "k-claude", grok: "k-grok", elevenlabs: "k-eleven",
+    gemini: "k-gemini", groq: "k-groq", deepseek: "k-deepseek",
+    mistral: "k-mistral", replicate: "k-replicate", fal: "k-fal",
+    deepgram: "k-deepgram", tavily: "k-tavily", brave: "k-brave"
+  };
   for (const [name, id] of Object.entries(fields)) {
     const v = localStorage.getItem("sandbox_key_" + name);
     if (v) document.getElementById(id).value = v;
@@ -67,7 +108,7 @@
       try { JSON.parse(fbv); localStorage.setItem("sandbox_firebase_config", fbv); }
       catch { document.getElementById("status").textContent = "⚠️ Firebase config is not valid JSON — not saved."; return; }
     } else localStorage.removeItem("sandbox_firebase_config");
-    document.getElementById("status").textContent = "✅ Saved to this browser.";
+    document.getElementById("status").textContent = "✅ All keys saved to this browser.";
   }
 </script>
 </body>
