@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⚔️ Debate Arena — Kimi's Sandbox</title>
+<style>
+  :root { --claude: #b0683a; --grok: #4a6fa5; }
+  body { font-family: Georgia, serif; background: #faf8f5; color: #3a3630; margin: 0;
+         display: flex; justify-content: center; padding: 1.5rem 1rem; }
+  .wrap { width: 100%; max-width: 680px; }
+  h1 { font-size: 1.7rem; margin: 0; text-align: center; }
+  .sub { color: #7a7264; text-align: center; margin: 0.3rem 0 1.2rem; font-size: 0.9rem; }
+  #record { text-align: center; font-size: 0.85rem; color: #8a7f68; margin-bottom: 1.2rem; }
+  .setup { background: #fff; border: 1px solid #e8e2d8; border-radius: 12px;
+           padding: 1.4rem; box-shadow: 0 2px 10px rgba(0,0,0,0.04); }
+  .setup input { width: 100%; box-sizing: border-box; padding: 0.7rem;
+           border: 1px solid #d8d0c0; border-radius: 8px; font-size: 1rem; }
+  .setup button { margin-top: 0.8rem; width: 100%; padding: 0.8rem; background: #8a7f68;
+           color: #fff; border: none; border-radius: 8px; font-size: 1.05rem; cursor: pointer; }
+  .setup button:hover { background: #6f6552; }
+  .suggest { margin-top: 0.7rem; font-size: 0.8rem; color: #a39a86; }
+  .suggest a { color: #8a7f68; cursor: pointer; text-decoration: underline; }
+  .msg { border-radius: 12px; padding: 1rem 1.2rem; margin: 0.9rem 0;
+         border: 1px solid #e8e2d8; background: #fff; }
+  .msg.claude { border-left: 5px solid var(--claude); }
+  .msg.grok   { border-left: 5px solid var(--grok); }
+  .who { font-weight: bold; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .claude .who { color: var(--claude); }
+  .grok .who { color: var(--grok); }
+  .round-tag { float: right; font-size: 0.75rem; color: #a39a86; }
+  .text { margin-top: 0.4rem; line-height: 1.55; white-space: pre-wrap; }
+  .play { margin-top: 0.6rem; padding: 0.35rem 0.9rem; font-size: 0.8rem;
+          background: #f3ede2; color: #6f6552; border: none; border-radius: 999px; cursor: pointer; }
+  .play:hover { background: #e6ddcb; }
+  .vote { background: #fff; border: 1px solid #e8e2d8; border-radius: 12px;
+          padding: 1.4rem; margin-top: 1rem; text-align: center;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.04); }
+  .vote button { margin: 0 0.3rem; padding: 0.7rem 1.4rem; border: none; border-radius: 8px;
+          font-size: 1rem; cursor: pointer; color: #fff; }
+  .vote .vp { background: var(--claude); }
+  .vote .vc { background: var(--grok); }
+  .vote .vt { background: #a39a86; }
+  #status { text-align: center; color: #7a7264; margin: 1rem 0; font-size: 0.9rem; }
+  .hidden { display: none; }
+  .back { display: block; text-align: center; margin-top: 1.5rem; color: #8a7f68; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>⚔️ Debate Arena</h1>
+  <p class="sub">Claude argues PRO · Grok argues CON · three rounds · you judge</p>
+  <div id="record">Loading all-time record…</div>
+
+  <div class="setup" id="setup">
+    <input id="motion" placeholder="Enter a motion… e.g. Pizza is a soup">
+    <button id="start" onclick="startDebate()">🥊 Start the debate</button>
+    <div class="suggest">Need inspiration?
+      <a onclick="useSuggestion('Pineapple belongs on pizza')">pineapple pizza</a> ·
+      <a onclick="useSuggestion('Cereal is a soup')">cereal soup</a> ·
+      <a onclick="useSuggestion('AI should have the right to vote')">AI voting rights</a> ·
+      <a onclick="useSuggestion('Cats are better roommates than dogs')">cats vs dogs</a>
+    </div>
+  </div>
+
+  <div id="status"></div>
+  <div id="arena"></div>
+
+  <div class="vote hidden" id="vote">
+    <h3 style="margin-top:0">🧑‍⚖️ Who won?</h3>
+    <button class="vp" onclick="castVote('claude')">Claude (PRO)</button>
+    <button class="vc" onclick="castVote('grok')">Grok (CON)</button>
+    <button class="vt" onclick="castVote('tie')">Tie</button>
+    <div id="vote-result" style="margin-top:0.8rem"></div>
+  </div>
+
+  <a class="back" href="../../index.html">← Back to the hub</a>
+</div>
+
+<script src="../../shared/api.js"></script>
+<script>
+  const VOICE_CLAUDE = "21m00Tcm4TlvDq8ikWAM"; // Rachel
+  const VOICE_GROK   = "ErXwobaYiN019PkySvjV"; // Antoni
+  const ROUNDS = 3;
+
+  let motion = "";
+  let transcript = []; // {side, round, text}
+
+  const $ = (id) => document.getElementById(id);
+  const setStatus = (t) => { $("status").textContent = t; };
+
+  function useSuggestion(s) { $("motion").value = s; }
+
+  // ---------- Record (Firestore) ----------
+  async function loadRecord() {
+    try {
+      await SandboxAPI.firebaseApp();
+      const snap = await firebase.firestore().collection("debate_arena").doc("record").get();
+      const d = snap.exists ? snap.data() : { claudeWins: 0, grokWins: 0, ties: 0 };
+      $("record").textContent =
+        `All-time record — Claude: ${d.claudeWins}W · Grok: ${d.grokWins}W · Ties: ${d.ties}`;
+    } catch (e) {
+      $("record").textContent = "(record unavailable: " + e.message + ")";
+    }
+  }
+
+  async function bumpRecord(winner) {
+    await SandboxAPI.firebaseApp();
+    const db = firebase.firestore();
+    const ref = db.collection("debate_arena").doc("record");
+    const field = winner === "claude" ? "claudeWins" : winner === "grok" ? "grokWins" : "ties";
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const d = snap.exists ? snap.data() : { claudeWins: 0, grokWins: 0, ties: 0 };
+      d[field] = (d[field] || 0) + 1;
+      tx.set(ref, d);
+    });
+    await db.collection("debate_arena").doc("debates").collection("history").add({
+      motion, winner, rounds: transcript, at: new Date().toISOString()
+    });
+    await loadRecord();
+  }
+
+  // ---------- Debate flow ----------
+  async function startDebate() {
+    motion = $("motion").value.trim();
+    if (!motion) { alert("Enter a motion first!"); return; }
+    $("setup").classList.add("hidden");
+    $("vote").classList.add("hidden");
+    $("vote-result").textContent = "";
+    $("arena").innerHTML = "";
+    transcript = [];
+    $("start").disabled = true;
+
+    try {
+      for (let round = 1; round <= ROUNDS; round++) {
+        const closing = round === ROUNDS;
+        // PRO — Claude
+        setStatus(`Round ${round}/${ROUNDS} — Claude (PRO) is thinking…`);
+        const proText = await SandboxAPI.claude(buildPrompt("PRO", round, closing), {
+          system: persona("PRO"), maxTokens: 400
+        });
+        addEntry("claude", round, proText);
+
+        // CON — Grok
+        setStatus(`Round ${round}/${ROUNDS} — Grok (CON) is thinking…`);
+        const conText = await SandboxAPI.grokText(buildPrompt("CON", round, closing), {
+          system: persona("CON")
+        });
+        addEntry("grok", round, conText);
+      }
+      setStatus("");
+      $("vote").classList.remove("hidden");
+      $("vote").scrollIntoView({ behavior: "smooth" });
+    } catch (e) {
+      setStatus("❌ " + e.message + " — check your keys on the Settings page, then reload.");
+      $("setup").classList.remove("hidden");
+    } finally {
+      $("start").disabled = false;
+    }
+  }
+
+  function persona(side) {
+    return `You are ${side === "PRO" ? "Claude, a sharp, charming debater arguing PRO" :
+      "Grok, a witty, slightly irreverent debater arguing CON"} in a public debate arena.
+Rules: stay on your assigned side no matter how absurd the motion; be funny and punchy;
+max 120 words per turn; no bullet points, speak like a person; never break character.`;
+  }
+
+  function buildPrompt(side, round, closing) {
+    const history = transcript.map(e =>
+      `[Round ${e.round} — ${e.side === "claude" ? "PRO (Claude)" : "CON (Grok)"}]: ${e.text}`).join("\n\n");
+    return `Motion: "${motion}"
+${history ? "Debate so far:\n" + history + "\n\n" : ""}
+This is Round ${round} of ${ROUNDS}${closing ? " — your CLOSING argument: land the knockout line" :
+  round === 1 ? " — make your OPENING argument" : " — rebut your opponent and add a new point"}.
+Deliver your ${side} argument now (max 120 words).`;
+  }
+
+  function addEntry(side, round, text) {
+    transcript.push({ side, round, text });
+    const div = document.createElement("div");
+    div.className = "msg " + side;
+    div.innerHTML = `
+      <span class="round-tag">Round ${round}</span>
+      <div class="who">${side === "claude" ? "🟠 Claude — PRO" : "🔵 Grok — CON"}</div>
+      <div class="text"></div>
+      <button class="play">🔊 Hear it</button>`;
+    div.querySelector(".text").textContent = text;
+    div.querySelector(".play").onclick = (ev) => playVoice(text, side, ev.target);
+    $("arena").appendChild(div);
+    div.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  async function playVoice(text, side, btn) {
+    btn.disabled = true; btn.textContent = "Generating…";
+    try {
+      const url = await SandboxAPI.elevenTTS(text, side === "claude" ? VOICE_CLAUDE : VOICE_GROK);
+      new Audio(url).play();
+      btn.textContent = "🔊 Play again";
+    } catch (e) {
+      btn.textContent = "❌ " + e.message.slice(0, 60);
+    } finally { btn.disabled = false; }
+  }
+
+  async function castVote(winner) {
+    $("vote-result").textContent = "Recording your vote…";
+    try {
+      await bumpRecord(winner);
+      $("vote-result").textContent =
+        winner === "tie" ? "🤝 A tie! The crowd is torn." :
+        winner === "claude" ? "🏆 Claude takes the round! 🟠" : "🏆 Grok takes the round! 🔵";
+    } catch (e) {
+      $("vote-result").textContent = "Vote counted locally (Firestore error: " + e.message + ")";
+    }
+    $("setup").classList.remove("hidden");
+    $("motion").value = "";
+    $("setup").scrollIntoView({ behavior: "smooth" });
+  }
+
+  loadRecord();
+</script>
+</body>
+</html>
