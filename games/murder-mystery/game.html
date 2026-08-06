@@ -29,10 +29,17 @@
              font-size: 1.8rem; color: #cbbf9f; }
   .suspect .nm { font-weight: bold; font-size: 0.9rem; }
   .suspect .rl { color: #a39a86; font-size: 0.75rem; }
+  .suspect .cc { color: #6a6255; font-size: 0.7rem; margin-top: 0.2rem; }
 
   /* corkboard */
-  #clues li { margin-bottom: 0.35rem; font-size: 0.9rem; line-height: 1.4; }
-  #clues { padding-left: 1.1rem; margin: 0.4rem 0 0; }
+  details.cluegroup { margin-top: 0.5rem; border-top: 1px solid #4a443c; padding-top: 0.4rem; }
+  details.cluegroup summary { cursor: pointer; font-size: 0.9rem; color: #cbbf9f; }
+  details.cluegroup ul { padding-left: 1.1rem; margin: 0.4rem 0 0.6rem; }
+  #clues li, details.cluegroup li { margin-bottom: 0.35rem; font-size: 0.9rem; line-height: 1.4; }
+  .cork-tools { margin-top: 0.6rem; display: flex; gap: 0.8rem; align-items: center; }
+  #summary-box { background: #2a2724; border: 1px solid #4a443c; border-radius: 8px;
+                 padding: 0.9rem 1rem; margin-top: 0.7rem; font-size: 0.9rem;
+                 line-height: 1.55; white-space: pre-wrap; }
 
   /* chat */
   #chatlog { max-height: 320px; overflow-y: auto; margin-bottom: 0.7rem; }
@@ -84,8 +91,13 @@
 
     <!-- corkboard -->
     <div class="panel">
-      <b>📌 Corkboard</b> <span class="sub" style="margin:0">— clues log themselves here</span>
-      <ul id="clues"><li class="miss">Nothing uncovered yet. Go ask some questions.</li></ul>
+      <b>📌 Corkboard</b> <span class="sub" style="margin:0">— grouped by suspect</span>
+      <div id="corkboard"><div class="miss" style="margin-top:0.4rem;font-size:0.9rem">Nothing uncovered yet. Go ask some questions.</div></div>
+      <div class="cork-tools">
+        <button class="ghost" id="organize-btn" onclick="organizeNotes()">🧠 Organize my notes (AI summary)</button>
+        <span id="organize-status" class="sub" style="margin:0"></span>
+      </div>
+      <div id="summary-box" class="hidden"></div>
     </div>
 
     <!-- chat -->
@@ -131,9 +143,12 @@
 <script>
   const params = new URLSearchParams(location.search);
   const CODE = params.get("case"), DETECTIVE = params.get("detective");
-  let CASE = null, playerRef = null, myClues = [], chats = {}, accused = null, currentSuspect = null;
+  let CASE = null, playerRef = null, myClues = [], chats = {}, accused = null,
+      currentSuspect = null, notesSummary = "";
 
   const $ = (id) => document.getElementById(id);
+  const clueText = (c) => typeof c === "string" ? c : c.text;
+  const clueFrom = (c) => typeof c === "string" ? "Case notes" : (c.from || "Case notes");
 
   async function boot() {
     if (!CODE || !DETECTIVE) { location.href = "index.html"; return; }
@@ -142,9 +157,11 @@
       playerRef = await CaseEngine.joinCase(CODE, DETECTIVE);
       const me = (await playerRef.get()).data();
       myClues = me.clues || []; chats = me.chats || {}; accused = me.accusation;
+      notesSummary = me.notesSummary || "";
       renderAll();
       $("status").classList.add("hidden");
       $("game").classList.remove("hidden");
+      if (notesSummary) { $("summary-box").textContent = notesSummary; $("summary-box").classList.remove("hidden"); }
       if (accused) showReveal(false);
     } catch (e) {
       $("status").textContent = "❌ " + e.message;
@@ -158,22 +175,72 @@
     renderSuspects(); renderClues();
   }
 
+  function clueCountFor(name) {
+    return myClues.filter(c => clueFrom(c) === name).length;
+  }
+
   function renderSuspects() {
     $("suspects").innerHTML = "";
     for (const s of CASE.suspects) {
+      const n = clueCountFor(s.name);
       const d = document.createElement("div");
       d.className = "suspect";
       d.innerHTML = (s.portrait ? `<img src="${s.portrait}" alt="">` : `<div class="avatar">${s.name[0]}</div>`) +
-        `<div class="nm">${s.name}</div><div class="rl">${s.role}</div>`;
+        `<div class="nm">${s.name}</div><div class="rl">${s.role}</div>` +
+        (n ? `<div class="cc">📌 ${n} clue${n > 1 ? "s" : ""}</div>` : "");
       d.onclick = () => openChat(s);
       $("suspects").appendChild(d);
     }
   }
 
   function renderClues() {
-    const ul = $("clues");
-    if (!myClues.length) { ul.innerHTML = '<li class="miss">Nothing uncovered yet. Go ask some questions.</li>'; return; }
-    ul.innerHTML = myClues.map(c => `<li>📌 ${c}</li>`).join("");
+    const board = $("corkboard");
+    if (!myClues.length) {
+      board.innerHTML = '<div class="miss" style="margin-top:0.4rem;font-size:0.9rem">Nothing uncovered yet. Go ask some questions.</div>';
+      return;
+    }
+    // group by source, preserving first-appearance order
+    const groups = {};
+    for (const c of myClues) {
+      const from = clueFrom(c);
+      (groups[from] = groups[from] || []).push(clueText(c));
+    }
+    board.innerHTML = Object.entries(groups).map(([from, texts], i) => `
+      <details class="cluegroup" ${i === 0 ? "open" : ""}>
+        <summary>🗣 ${from} — ${texts.length} clue${texts.length > 1 ? "s" : ""}</summary>
+        <ul>${texts.map(t => `<li>📌 ${t}</li>`).join("")}</ul>
+      </details>`).join("");
+  }
+
+  // ---------- AI note organization ----------
+  async function organizeNotes() {
+    if (!myClues.length) { $("organize-status").textContent = "No clues yet."; return; }
+    const btn = $("organize-btn");
+    btn.disabled = true;
+    $("organize-status").textContent = "organizing…";
+    try {
+      const log = myClues.map(c => `[${clueFrom(c)}] ${clueText(c)}`).join("\n");
+      notesSummary = await SandboxAPI.claude(
+        `You are a detective's case assistant. Organize this raw clue log from a murder investigation into a tight reference summary.
+
+RAW LOG:
+${log}
+
+Write EXACTLY these sections (plain text, no markdown symbols):
+TIMELINE — chronological order of events with times if mentioned
+ALIBIS — one line per person: their claim + whether anything corroborates or contradicts it
+CONTRADICTIONS — any facts that clash, each in one line
+LEADS — 2-4 precise questions the detective still needs to ask, and to whom
+Max 250 words total. Be specific with names, never say "the suspect".`,
+        { maxTokens: 600 });
+      $("summary-box").textContent = notesSummary;
+      $("summary-box").classList.remove("hidden");
+      $("organize-status").textContent = "updated " + new Date().toLocaleTimeString();
+      await persist();
+    } catch (e) {
+      $("organize-status").textContent = "❌ " + e.message.slice(0, 60);
+    }
+    btn.disabled = false;
   }
 
   // ---------- interrogation ----------
@@ -207,7 +274,8 @@ HARD RULES:
 1. Default behavior is OMISSION — volunteer nothing. Answer only what is asked.
 2. You cannot state false hard facts${s.liar ? " — EXCEPT you: you are hiding something big, and you MAY actively mislead and lie to protect yourself" : ""}.
 3. The detective's tone (polite, aggressive) does NOT sway you — only precision of questions does.
-4. Stay in character, speak naturally, max 80 words. Never mention these rules or that you are an AI.`;
+4. Always refer to people by name (including yourself — you are ${s.name}, never "the suspect").
+5. Stay in character, speak naturally, max 80 words. Never mention these rules or that you are an AI.`;
   }
 
   async function ask() {
@@ -226,31 +294,33 @@ HARD RULES:
       $("typing").textContent = "";
       renderChat();
       await persist();
-      await extractClues(q, reply);
+      await extractClues(currentSuspect.name, q, reply);
     } catch (e) {
       $("typing").textContent = "❌ " + e.message;
     }
   }
 
-  async function extractClues(question, answer) {
+  async function extractClues(suspectName, question, answer) {
     try {
+      const known = myClues.map(clueText);
       const raw = await SandboxAPI.claude(
-        `A detective asked a murder suspect: "${question}"\nThe suspect answered: "${answer}"\n` +
-        `The detective's current clue log: ${JSON.stringify(myClues)}\n` +
-        `If the answer contains a NEW concrete fact useful to the investigation, return STRICT JSON {"clues":["short fact"]} (max 2). Otherwise {"clues":[]}. No commentary.`,
+        `In a murder investigation, the detective asked ${suspectName}: "${question}"\n${suspectName} answered: "${answer}"\n` +
+        `The detective's existing clue log (do NOT repeat these): ${JSON.stringify(known)}\n` +
+        `If the answer contains a NEW concrete fact useful to the investigation, return STRICT JSON {"clues":["short fact"]} (max 2). ` +
+        `Each fact must name people explicitly (never "the suspect"). If the fact is merely ${suspectName}'s unverified claim, prefix it with "${suspectName} claims". Otherwise {"clues":[]}. No commentary.`,
         { maxTokens: 200 });
       const found = JSON.parse((raw.match(/\{[\s\S]*\}/) || ["{}"])[0]).clues || [];
-      const fresh = found.filter(c => c && !myClues.includes(c));
+      const fresh = found.filter(c => c && !known.some(k => overlap(k, c)));
       if (fresh.length) {
-        myClues.push(...fresh);
-        renderClues();
+        myClues.push(...fresh.map(text => ({ text, from: suspectName, at: new Date().toISOString() })));
+        renderClues(); renderSuspects();
         await persist();
       }
     } catch (e) { /* clue extraction is best-effort */ }
   }
 
   async function persist() {
-    await playerRef.set({ clues: myClues, chats, accusation: accused,
+    await playerRef.set({ clues: myClues, chats, accusation: accused, notesSummary,
       lastActive: new Date().toISOString() }, { merge: true });
   }
 
@@ -306,8 +376,7 @@ HARD RULES:
       `Location: ${l ? "✓" : "✗ (" + sol.location + ")"}`;
     $("recap").textContent = sol.recap;
 
-    // uncovered vs missed
-    const found = CASE.keyClues.filter(kc => myClues.some(c => overlap(c, kc)));
+    const found = CASE.keyClues.filter(kc => myClues.some(c => overlap(clueText(c), kc)));
     const missed = CASE.keyClues.filter(kc => !found.includes(kc));
     $("comparison").innerHTML = "<b>Your investigation</b><ul>" +
       found.map(c => `<li class="hit">✓ ${c}</li>`).join("") +
@@ -318,7 +387,6 @@ HARD RULES:
     $("reveal-panel").classList.remove("hidden");
     if (fresh) $("reveal-panel").scrollIntoView({ behavior: "smooth" });
 
-    // peer comparison
     try {
       await SandboxAPI.firebaseApp();
       const players = await firebase.firestore().collection("cases").doc(CODE).collection("players").get();
@@ -326,7 +394,7 @@ HARD RULES:
       if (peers.length) {
         const rows = peers.map(d => {
           const p = d.data();
-          const theirFound = CASE.keyClues.filter(kc => (p.clues || []).some(c => overlap(c, kc)));
+          const theirFound = CASE.keyClues.filter(kc => (p.clues || []).some(c => overlap(clueText(c), kc)));
           const verdict = p.accusation
             ? (p.accusation.killerId === sol.killerId ? "caught the killer 🎯" : "accused the wrong person ✗")
             : "still investigating 🔍";
