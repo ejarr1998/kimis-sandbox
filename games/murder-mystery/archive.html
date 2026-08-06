@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📁 Case Archive — Dead Air</title>
+<style>
+  body { font-family: Georgia, serif; background: #2a2724; color: #e8e2d8; margin: 0;
+         display: flex; justify-content: center; padding: 1.5rem 1rem; box-sizing: border-box; }
+  .wrap { width: 100%; max-width: 640px; }
+  h1 { font-size: 1.6rem; margin: 0 0 0.2rem; }
+  .sub { color: #a39a86; margin-bottom: 1.4rem; font-size: 0.9rem; }
+  .case { background: #35312c; border: 1px solid #4a443c; border-radius: 12px;
+          padding: 1.1rem 1.2rem; margin-bottom: 0.9rem; cursor: pointer;
+          transition: transform .15s; }
+  .case:hover { transform: translateY(-2px); border-color: #cbbf9f; }
+  .case .ct { font-weight: bold; font-size: 1.05rem; }
+  .case .cm { color: #a39a86; font-size: 0.82rem; margin-top: 0.3rem; line-height: 1.5; }
+  .case .code { float: right; color: #cbbf9f; letter-spacing: 0.25em; font-weight: bold; }
+  .case .players { margin-top: 0.4rem; font-size: 0.8rem; }
+  .p-open { color: #d9b968; } .p-done { color: #8fbf7f; }
+  #status { color: #a39a86; text-align: center; padding: 2rem 0; }
+  a.back { display: block; text-align: center; margin-top: 1.4rem; color: #a39a86; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📁 Case Archive</h1>
+  <p class="sub">Every mystery ever generated. Tap one to join or rejoin it.</p>
+  <div id="status">Dusting off the files…</div>
+  <div id="cases"></div>
+  <a class="back" href="index.html">← Back to the lobby</a>
+</div>
+
+<script src="../../shared/api.js"></script>
+<script>
+  async function boot() {
+    try {
+      await SandboxAPI.firebaseApp();
+      const db = firebase.firestore();
+      const snap = await db.collection("cases").orderBy("createdAt", "desc").get();
+      if (snap.empty) {
+        document.getElementById("status").textContent =
+          "No cases yet — generate your first mystery from the lobby!";
+        return;
+      }
+      document.getElementById("status").style.display = "none";
+      const box = document.getElementById("cases");
+
+      for (const doc of snap.docs) {
+        const c = doc.data();
+        let playersHtml = "";
+        try {
+          const players = await db.collection("cases").doc(doc.id).collection("players").get();
+          if (!players.empty) {
+            playersHtml = '<div class="players">🕵️ ' + players.docs.map(p => {
+              const d = p.data();
+              const done = !!d.accusation;
+              return `<span class="${done ? "p-done" : "p-open"}">${p.id}${done ? " ✓" : " …"}</span>`;
+            }).join(" · ") + "</div>";
+          }
+        } catch (e) { /* players list best-effort */ }
+
+        const div = document.createElement("div");
+        div.className = "case";
+        div.innerHTML = `<span class="code">${doc.id}</span>
+          <div class="ct">${c.title || "Untitled case"}</div>
+          <div class="cm">Victim: ${c.victim ? c.victim.name : "?"} · ${c.suspects ? c.suspects.length : "?"} suspects ·
+             opened ${new Date(c.createdAt).toLocaleString()}</div>` + playersHtml;
+        div.onclick = () => joinPrompt(doc.id);
+        box.appendChild(div);
+      }
+    } catch (e) {
+      document.getElementById("status").textContent = "❌ " + e.message;
+    }
+  }
+
+  function joinPrompt(code) {
+    const name = prompt("Case " + code + " — enter your detective name (use the SAME name to resume an existing investigation):");
+    if (name && name.trim()) {
+      location.href = `game.html?case=${encodeURIComponent(code)}&detective=${encodeURIComponent(name.trim())}`;
+    }
+  }
+
+  boot();
+</script>
+</body>
+</html>
