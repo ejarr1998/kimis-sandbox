@@ -3,151 +3,398 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🕵️ Dead Air — Investigation</title>
+<title>Dead Air — Case File</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
 <style>
-  body { font-family: Georgia, serif; background: #2a2724; color: #e8e2d8; margin: 0;
-         padding: 1rem; box-sizing: border-box; }
-  .wrap { max-width: 720px; margin: 0 auto; }
-  h1 { font-size: 1.3rem; margin: 0.4rem 0; }
-  .sub { color: #a39a86; font-size: 0.85rem; margin-bottom: 1rem; }
-  button { cursor: pointer; border: none; border-radius: 8px; }
-  .gold { background: #cbbf9f; color: #2a2724; font-weight: bold; padding: 0.6rem 1.2rem; }
-  .gold:hover { background: #ddd2b2; }
-  .ghost { background: none; color: #a39a86; font-size: 0.8rem; text-decoration: underline; }
+  :root {
+    --ink: #16130f;
+    --ink2: #211c16;
+    --paper: #efe6d0;
+    --paper-dim: #d9cdb2;
+    --red: #8a2f2b;
+    --brass: #c9a86a;
+    --mute: #8d8271;
+    --line: #3a332a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "EB Garamond", Georgia, serif;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(201,168,106,0.06), transparent 55%),
+      radial-gradient(ellipse at 85% 90%, rgba(138,47,43,0.05), transparent 50%),
+      var(--ink);
+    color: var(--paper);
+    margin: 0; padding: 0 0 4rem;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 1rem; }
+
+  /* ---------- masthead ---------- */
+  .masthead {
+    border-bottom: 3px double var(--line);
+    padding: 1.4rem 0 0.9rem; margin-bottom: 1.2rem;
+    display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem;
+  }
+  .masthead .brand {
+    font-family: "Special Elite", monospace;
+    font-size: 0.7rem; letter-spacing: 0.35em; color: var(--brass);
+    text-transform: uppercase;
+  }
+  .masthead h1 {
+    font-family: "Special Elite", monospace;
+    font-size: 1.45rem; margin: 0.25rem 0 0; color: var(--paper);
+    letter-spacing: 0.02em; line-height: 1.2;
+  }
+  .meta { text-align: right; font-size: 0.8rem; color: var(--mute); line-height: 1.5; white-space: nowrap; }
+  .meta .leave { color: var(--red); background: none; border: none; cursor: pointer;
+    font-family: inherit; font-size: 0.8rem; text-decoration: underline; padding: 0; }
+  .red-string { height: 2px; background: linear-gradient(90deg, transparent, var(--red), transparent); margin: 0.6rem 0 0; }
+
+  /* ---------- shared paper panel ---------- */
+  .panel {
+    position: relative;
+    background: linear-gradient(175deg, #221d17, #1c1813);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1.2rem 1.3rem;
+    margin-bottom: 1.3rem;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.45);
+    animation: rise .5s ease both;
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+  .panel-title {
+    font-family: "Special Elite", monospace;
+    font-size: 0.72rem; letter-spacing: 0.3em; text-transform: uppercase;
+    color: var(--brass); margin: 0 0 0.9rem;
+    display: flex; align-items: center; gap: 0.6rem;
+  }
+  .panel-title::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .panel-title .right { letter-spacing: normal; text-transform: none; color: var(--mute); font-size: 0.75rem; }
+
+  button { font-family: inherit; cursor: pointer; border: none; }
+  .stamp-btn {
+    font-family: "Special Elite", monospace;
+    background: var(--red); color: var(--paper);
+    padding: 0.65rem 1.3rem; border-radius: 3px;
+    font-size: 0.85rem; letter-spacing: 0.12em; text-transform: uppercase;
+    box-shadow: 0 3px 0 #5c1f1c, 0 5px 12px rgba(0,0,0,0.4);
+    transition: transform .1s, box-shadow .1s;
+  }
+  .stamp-btn:hover { transform: translateY(1px); box-shadow: 0 2px 0 #5c1f1c, 0 4px 10px rgba(0,0,0,0.4); }
+  .stamp-btn:active { transform: translateY(3px); box-shadow: 0 0 0 #5c1f1c; }
+  .ghost {
+    background: none; color: var(--mute); font-size: 0.82rem;
+    text-decoration: underline; padding: 0.3rem 0;
+  }
+  .ghost:hover { color: var(--paper); }
   .hidden { display: none !important; }
-  .panel { background: #35312c; border: 1px solid #4a443c; border-radius: 12px;
-           padding: 1.2rem; margin-bottom: 1rem; }
 
-  /* suspect grid */
-  .suspects { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.8rem; }
-  .suspect { background: #2a2724; border: 1px solid #4a443c; border-radius: 10px;
-             padding: 0.7rem; text-align: center; cursor: pointer; transition: transform .15s; }
-  .suspect:hover { transform: translateY(-2px); border-color: #cbbf9f; }
-  .suspect img, .suspect .avatar { width: 72px; height: 72px; border-radius: 50%;
-             object-fit: cover; margin-bottom: 0.4rem; background: #4a443c; }
+  /* ---------- dossier (opening) ---------- */
+  .dossier {
+    background:
+      linear-gradient(rgba(22,19,15,0.55), rgba(22,19,15,0.55)),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='0.16'/%3E%3C/svg%3E"),
+      linear-gradient(170deg, #e9dfc8, #d9cba9);
+    color: #2c2519;
+    border: none;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.55), inset 0 0 60px rgba(120,90,40,0.12);
+    transform: rotate(-0.4deg);
+  }
+  .dossier .stamp {
+    position: absolute; top: 0.9rem; right: 1rem;
+    font-family: "Special Elite", monospace; font-size: 0.65rem;
+    color: var(--red); border: 2px solid var(--red); border-radius: 3px;
+    padding: 0.25rem 0.6rem; transform: rotate(6deg); letter-spacing: 0.2em;
+    text-transform: uppercase; opacity: 0.8;
+  }
+  .dossier p { font-size: 1.02rem; line-height: 1.75; margin: 0.4rem 0 0.8rem; }
+  .dossier .panel-title { color: #6d5426; }
+  .dossier .panel-title::after { background: rgba(109,84,38,0.35); }
+  .dossier .ghost { color: #6d5426; }
+
+  /* ---------- suspect wall ---------- */
+  .suspects { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; }
+  .suspect {
+    position: relative;
+    background: linear-gradient(170deg, #e9dfc8, #d8caab);
+    color: #2c2519;
+    border-radius: 3px;
+    padding: 0.7rem 0.7rem 0.8rem;
+    text-align: center;
+    cursor: pointer;
+    box-shadow: 0 5px 14px rgba(0,0,0,0.5);
+    transition: transform .15s;
+  }
+  .suspect:nth-child(odd) { transform: rotate(-1.1deg); }
+  .suspect:nth-child(even) { transform: rotate(0.9deg); }
+  .suspect:hover { transform: rotate(0) translateY(-3px); }
+  .suspect::before { /* red pin */
+    content: ""; position: absolute; top: -7px; left: 50%; margin-left: -7px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #c25a52, var(--red) 60%, #5c1f1c);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.6);
+  }
+  .suspect img, .suspect .avatar {
+    width: 84px; height: 84px; border-radius: 2px; object-fit: cover;
+    filter: sepia(0.35) contrast(1.05);
+    border: 1px solid rgba(60,45,25,0.35);
+    background: #b9a982;
+  }
   .suspect .avatar { display: inline-flex; align-items: center; justify-content: center;
-             font-size: 1.8rem; color: #cbbf9f; }
-  .suspect .nm { font-weight: bold; font-size: 0.9rem; }
-  .suspect .rl { color: #a39a86; font-size: 0.75rem; }
-  .suspect .cc { color: #6a6255; font-size: 0.7rem; margin-top: 0.2rem; }
+    font-family: "Special Elite", monospace; font-size: 2rem; color: #6d5426; }
+  .suspect .nm { font-family: "Special Elite", monospace; font-size: 0.82rem; margin-top: 0.5rem; }
+  .suspect .rl { font-size: 0.78rem; color: #6d5c3e; font-style: italic; margin-top: 0.1rem; }
+  .suspect .cc {
+    display: inline-block; margin-top: 0.35rem; font-size: 0.68rem;
+    font-family: "Special Elite", monospace; color: var(--red);
+    border-top: 1px solid rgba(138,47,43,0.4); padding-top: 0.25rem;
+  }
 
-  /* evidence */
-  .evidence-item { background: #2a2724; border: 1px solid #4a443c; border-radius: 10px;
-             padding: 0.7rem 0.9rem; margin-top: 0.5rem; cursor: pointer; transition: transform .15s; }
-  .evidence-item:hover { transform: translateY(-1px); border-color: #cbbf9f; }
-  .evidence-item .en { font-weight: bold; font-size: 0.92rem; }
-  .evidence-item .ed { color: #a39a86; font-size: 0.82rem; margin-top: 0.25rem; line-height: 1.45; }
-  .evidence-item.examined { opacity: 0.75; }
-  .evidence-item .tag-done { color: #8fbf7f; font-size: 0.75rem; margin-left: 0.4rem; }
+  /* ---------- evidence locker ---------- */
+  .evidence-item {
+    position: relative;
+    background: linear-gradient(170deg, #d9c9a3, #c9b788);
+    color: #2c2519;
+    border-radius: 3px 3px 8px 3px;
+    padding: 0.7rem 0.9rem 0.7rem 2.4rem;
+    margin-top: 0.6rem;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+    transition: transform .15s;
+  }
+  .evidence-item::before { /* tag hole + string */
+    content: ""; position: absolute; left: 0.9rem; top: 0.85rem;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--ink); box-shadow: inset 0 1px 2px rgba(255,255,255,0.2);
+  }
+  .evidence-item:hover { transform: translateY(-2px); }
+  .evidence-item .en { font-family: "Special Elite", monospace; font-size: 0.85rem; }
+  .evidence-item .ed { font-size: 0.85rem; color: #5a4c30; margin-top: 0.3rem; line-height: 1.5; font-style: italic; }
+  .evidence-item.examined { opacity: 0.8; }
+  .evidence-item .tag-done {
+    font-family: "Special Elite", monospace; color: var(--red); font-size: 0.68rem;
+    margin-left: 0.5rem; letter-spacing: 0.1em;
+  }
 
-  /* corkboard */
-  details.cluegroup { margin-top: 0.5rem; border-top: 1px solid #4a443c; padding-top: 0.4rem; }
-  details.cluegroup summary { cursor: pointer; font-size: 0.9rem; color: #cbbf9f; }
-  details.cluegroup ul { padding-left: 1.1rem; margin: 0.4rem 0 0.6rem; }
-  #clues li, details.cluegroup li { margin-bottom: 0.35rem; font-size: 0.9rem; line-height: 1.4; }
-  .cork-tools { margin-top: 0.6rem; display: flex; gap: 0.8rem; align-items: center; }
-  #summary-box { background: #2a2724; border: 1px solid #4a443c; border-radius: 8px;
-                 padding: 0.9rem 1rem; margin-top: 0.7rem; font-size: 0.9rem;
-                 line-height: 1.55; white-space: pre-wrap; }
+  /* ---------- corkboard ---------- */
+  .cork {
+    background:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='c'%3E%3CfeTurbulence baseFrequency='0.35' numOctaves='3'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23c)' opacity='0.22'/%3E%3C/svg%3E"),
+      linear-gradient(170deg, #4d3a26, #3d2e1e);
+    border: 6px solid #2b2116;
+    border-radius: 6px;
+  }
+  .cork .panel-title { color: #d8c49a; }
+  .cork .panel-title::after { background: rgba(216,196,154,0.25); }
+  details.cluegroup { margin-top: 0.6rem; }
+  details.cluegroup summary {
+    cursor: pointer; list-style: none;
+    font-family: "Special Elite", monospace; font-size: 0.78rem;
+    color: #e5d7b8; letter-spacing: 0.08em;
+    padding: 0.2rem 0;
+  }
+  details.cluegroup summary::before { content: "▸ "; color: var(--red); }
+  details.cluegroup[open] summary::before { content: "▾ "; }
+  details.cluegroup ul { list-style: none; padding: 0.3rem 0 0.6rem; margin: 0;
+    display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  details.cluegroup li {
+    position: relative;
+    background: linear-gradient(170deg, #efe6d0, #ddd0b2);
+    color: #2c2519;
+    font-size: 0.82rem; line-height: 1.45;
+    padding: 0.6rem 0.7rem 0.6rem;
+    border-radius: 2px;
+    max-width: 46%;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.45);
+  }
+  details.cluegroup li::before {
+    content: ""; position: absolute; top: -5px; left: 50%; margin-left: -5px;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #c25a52, var(--red) 60%, #5c1f1c);
+  }
+  details.cluegroup li:nth-child(odd) { transform: rotate(-0.8deg); }
+  details.cluegroup li:nth-child(even) { transform: rotate(0.7deg); }
+  .cork-empty { color: #c9b788; font-style: italic; font-size: 0.9rem; padding: 0.5rem 0; }
+  .cork-tools { margin-top: 0.8rem; display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap; }
+  .cork-tools .ghost { color: #d8c49a; }
+  #summary-box {
+    background: linear-gradient(170deg, #efe6d0, #ddd0b2);
+    color: #2c2519;
+    border-radius: 2px; padding: 1rem 1.1rem; margin-top: 0.8rem;
+    font-size: 0.88rem; line-height: 1.6; white-space: pre-wrap;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    transform: rotate(-0.3deg);
+  }
 
-  /* chat */
-  #chatlog { max-height: 320px; overflow-y: auto; margin-bottom: 0.7rem; }
-  .bubble { border-radius: 10px; padding: 0.55rem 0.9rem; margin: 0.45rem 0;
-            font-size: 0.92rem; line-height: 1.5; max-width: 88%; white-space: pre-wrap; }
-  .me { background: #4a443c; margin-left: auto; }
-  .them { background: #2a2724; border: 1px solid #4a443c; }
+  /* ---------- interrogation ---------- */
+  .chat-head { display: flex; align-items: center; gap: 0.9rem; margin-bottom: 0.8rem; }
+  .chat-head img, .chat-head .avatar {
+    width: 56px; height: 56px; border-radius: 3px; object-fit: cover;
+    filter: sepia(0.35); border: 1px solid var(--line); background: #4a443c;
+  }
+  .chat-head .avatar { display: flex; align-items: center; justify-content: center;
+    font-family: "Special Elite", monospace; font-size: 1.5rem; color: var(--brass); }
+  .chat-head .who { font-family: "Special Elite", monospace; font-size: 1rem; }
+  .chat-head .role { font-size: 0.8rem; color: var(--mute); font-style: italic; }
+  .chat-head .end { margin-left: auto; }
+  #chatlog { max-height: 340px; overflow-y: auto; padding-right: 0.3rem; margin-bottom: 0.7rem; }
+  .bubble { border-radius: 4px; padding: 0.6rem 0.9rem; margin: 0.5rem 0;
+    font-size: 0.95rem; line-height: 1.6; max-width: 88%; white-space: pre-wrap;
+    animation: rise .3s ease both; }
+  .me { background: #2c2620; margin-left: auto; border-left: 3px solid var(--brass); }
+  .them { background: linear-gradient(170deg, #e9dfc8, #d8caab); color: #2c2519;
+    border-left: 3px solid var(--red); }
+  .them em, .them i { color: #6d5c3e; }
+  #typing { color: var(--mute); font-size: 0.85rem; font-style: italic; min-height: 1.2rem; margin-bottom: 0.4rem; }
   #chatbar { display: flex; gap: 0.5rem; }
-  #chatbar input { flex: 1; padding: 0.6rem; background: #2a2724; border: 1px solid #4a443c;
-                   border-radius: 8px; color: #e8e2d8; font-size: 0.95rem; }
-  #typing { color: #a39a86; font-size: 0.85rem; min-height: 1.2rem; margin-bottom: 0.3rem; }
+  #chatbar input {
+    flex: 1; padding: 0.65rem 0.8rem; background: var(--ink);
+    border: 1px solid var(--line); border-radius: 3px;
+    color: var(--paper); font-family: inherit; font-size: 0.95rem;
+  }
+  #chatbar input:focus { outline: 1px solid var(--brass); }
 
-  /* accuse + reveal */
-  select { width: 100%; padding: 0.6rem; margin: 0.3rem 0 0.8rem; background: #2a2724;
-           color: #e8e2d8; border: 1px solid #4a443c; border-radius: 8px; font-size: 0.95rem; }
-  .verdict-right { color: #8fbf7f; font-weight: bold; }
-  .verdict-wrong { color: #d98880; font-weight: bold; }
-  .cmp { font-size: 0.9rem; line-height: 1.5; }
-  .cmp li { margin-bottom: 0.3rem; }
-  .hit { color: #8fbf7f; } .miss { color: #a39a86; }
-  #status { color: #a39a86; text-align: center; padding: 2rem 0; }
-  .topbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.4rem; }
+  /* ---------- warrant (accuse) ---------- */
+  .warrant {
+    background:
+      linear-gradient(rgba(22,19,15,0.5), rgba(22,19,15,0.5)),
+      linear-gradient(170deg, #e9dfc8, #d9cba9);
+    color: #2c2519; border: none;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.55);
+    transform: rotate(0.3deg);
+  }
+  .warrant .panel-title { color: var(--red); }
+  .warrant .panel-title::after { background: rgba(138,47,43,0.3); }
+  .warrant label { font-family: "Special Elite", monospace; font-size: 0.7rem;
+    letter-spacing: 0.2em; text-transform: uppercase; color: #6d5426; }
+  .warrant select {
+    width: 100%; padding: 0.6rem; margin: 0.3rem 0 0.9rem;
+    background: rgba(255,252,240,0.7); color: #2c2519;
+    border: 1px solid rgba(109,84,38,0.5); border-radius: 3px;
+    font-family: inherit; font-size: 0.95rem;
+  }
+  .warrant .sub { color: #6d5c3e; }
+  .warrant .ghost { color: #6d5426; }
+
+  /* ---------- reveal ---------- */
+  .verdict-stamp {
+    display: inline-block;
+    font-family: "Special Elite", monospace;
+    font-size: 1.5rem; letter-spacing: 0.15em; text-transform: uppercase;
+    border: 4px solid; border-radius: 5px; padding: 0.4rem 1.2rem;
+    transform: rotate(-6deg);
+    margin: 0.4rem 0 1rem;
+    animation: slam .45s cubic-bezier(.2,2.2,.4,1) both;
+  }
+  @keyframes slam { 0% { transform: rotate(-6deg) scale(2.4); opacity: 0; } 60% { opacity: 1; } 100% { transform: rotate(-6deg) scale(1); } }
+  .verdict-stamp.win { color: #7fae6f; border-color: #7fae6f; }
+  .verdict-stamp.partial { color: var(--brass); border-color: var(--brass); }
+  .verdict-stamp.loss { color: #d97a72; border-color: #d97a72; }
+  .scoreline { font-size: 0.95rem; line-height: 1.7; margin-bottom: 1rem; }
+  #recap { font-size: 1.02rem; line-height: 1.75; font-style: italic; }
+  .cmp { font-size: 0.9rem; line-height: 1.55; margin-top: 1rem; }
+  .cmp ul { padding-left: 1.1rem; }
+  .cmp li { margin-bottom: 0.35rem; }
+  .hit { color: #7fae6f; } .miss { color: var(--mute); }
+  .cmp .sub { margin-top: 0.5rem; }
+
+  #status { color: var(--mute); text-align: center; padding: 3rem 0; font-style: italic; }
+  @media (max-width: 560px) {
+    details.cluegroup li { max-width: 100%; }
+    .meta { display: none; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="topbar">
-    <h1 id="title">🕵️ Dead Air</h1>
-    <button class="ghost" onclick="location.href='index.html'">leave case</button>
+
+  <div class="masthead">
+    <div>
+      <div class="brand">Dead Air · Homicide Division</div>
+      <h1 id="title">Case File</h1>
+      <div class="red-string"></div>
+    </div>
+    <div class="meta">
+      <div id="subtitle"></div>
+      <button class="leave" onclick="location.href='index.html'">close file &nbsp;✕</button>
+    </div>
   </div>
-  <div class="sub" id="subtitle"></div>
+
   <div id="status">Opening case file…</div>
   <div id="game" class="hidden">
 
-    <!-- opening -->
-    <div class="panel" id="opening-panel">
-      <p id="opening" style="line-height:1.6;margin:0 0 0.7rem"></p>
-      <button class="ghost" onclick="narrate(this, CASE.openingScene)">🔊 Hear the opening</button>
+    <!-- dossier: opening scene -->
+    <div class="panel dossier" id="opening-panel">
+      <div class="stamp">Case File</div>
+      <div class="panel-title">Initial Report</div>
+      <p id="opening"></p>
+      <button class="ghost" onclick="narrate(this, CASE.openingScene)">🔊 hear the report read aloud</button>
     </div>
 
-    <!-- dashboard -->
+    <!-- suspect wall -->
     <div class="panel" id="dashboard">
-      <div class="topbar">
-        <b>👤 Suspects</b>
-        <button class="gold" onclick="showAccuse()">⚖️ Make an accusation</button>
+      <div class="panel-title">Suspect Wall
+        <span class="right"><button class="stamp-btn" onclick="showAccuse()">⚖ Make Accusation</button></span>
       </div>
-      <div class="suspects" id="suspects" style="margin-top:0.8rem"></div>
+      <div class="suspects" id="suspects"></div>
     </div>
 
-    <!-- evidence -->
+    <!-- evidence locker -->
     <div class="panel" id="evidence-panel">
-      <b>🔎 Evidence</b> <span class="sub" style="margin:0">— tap to examine</span>
+      <div class="panel-title">Evidence Locker <span class="right">tap a tag to examine</span></div>
       <div id="evidence"></div>
     </div>
 
     <!-- corkboard -->
-    <div class="panel">
-      <b>📌 Corkboard</b> <span class="sub" style="margin:0">— grouped by source</span>
-      <div id="corkboard"><div class="miss" style="margin-top:0.4rem;font-size:0.9rem">Nothing uncovered yet. Go ask some questions.</div></div>
+    <div class="panel cork">
+      <div class="panel-title">The Corkboard <span class="right">clues pin themselves</span></div>
+      <div id="corkboard"><div class="cork-empty">Nothing pinned yet. Go ask some questions.</div></div>
       <div class="cork-tools">
-        <button class="ghost" id="organize-btn" onclick="organizeNotes()">🧠 Organize my notes (AI summary)</button>
-        <span id="organize-status" class="sub" style="margin:0"></span>
+        <button class="ghost" id="organize-btn" onclick="organizeNotes()">🧠 type up my notes (AI summary)</button>
+        <span id="organize-status" style="color:#c9b788;font-size:0.8rem"></span>
       </div>
       <div id="summary-box" class="hidden"></div>
     </div>
 
-    <!-- chat -->
+    <!-- interrogation -->
     <div class="panel hidden" id="chat-panel">
-      <div class="topbar">
-        <b id="chat-title"></b>
-        <button class="ghost" onclick="closeChat()">← back to suspects</button>
+      <div class="panel-title">Interrogation Room</div>
+      <div class="chat-head">
+        <div id="chat-portrait"></div>
+        <div>
+          <div class="who" id="chat-who"></div>
+          <div class="role" id="chat-role"></div>
+        </div>
+        <button class="ghost end" onclick="closeChat()">end interview ✕</button>
       </div>
-      <div id="chatlog" style="margin-top:0.6rem"></div>
+      <div id="chatlog"></div>
       <div id="typing"></div>
       <div id="chatbar">
         <input id="question" placeholder="Ask a precise question…" onkeydown="if(event.key==='Enter')ask()">
-        <button class="gold" onclick="ask()">Ask</button>
+        <button class="stamp-btn" onclick="ask()">Ask</button>
       </div>
     </div>
 
-    <!-- accuse -->
-    <div class="panel hidden" id="accuse-panel">
-      <b>⚖️ Your accusation</b>
-      <p class="sub">This is final — choose carefully, detective.</p>
+    <!-- warrant -->
+    <div class="panel warrant hidden" id="accuse-panel">
+      <div class="panel-title">Arrest Warrant — Final</div>
+      <p class="sub" style="font-style:italic">Signed accusations cannot be taken back, detective.</p>
       <label>The killer</label><select id="pick-killer"></select>
       <label>The weapon</label><select id="pick-weapon"></select>
       <label>The location</label><select id="pick-location"></select>
-      <button class="gold" style="width:100%" onclick="submitAccusation()">Submit accusation</button>
-      <button class="ghost" style="width:100%;margin-top:0.4rem" onclick="hideAccuse()">not yet — keep investigating</button>
+      <button class="stamp-btn" style="width:100%" onclick="submitAccusation()">Sign &amp; Submit</button>
+      <div style="text-align:center"><button class="ghost" onclick="hideAccuse()">not yet — keep investigating</button></div>
     </div>
 
     <!-- reveal -->
     <div class="panel hidden" id="reveal-panel">
-      <b>🎭 The truth</b>
-      <p id="verdict" style="margin:0.6rem 0"></p>
-      <p id="recap" style="line-height:1.6"></p>
-      <button class="ghost" onclick="narrate(this, CASE.solution.recap)">🔊 Hear how it happened</button>
-      <div class="cmp" id="comparison" style="margin-top:1rem"></div>
-      <div class="cmp" id="peer-comparison" style="margin-top:1rem"></div>
+      <div class="panel-title">Case Resolution</div>
+      <div id="stamp-slot"></div>
+      <div class="scoreline" id="verdict"></div>
+      <p id="recap"></p>
+      <button class="ghost" onclick="narrate(this, CASE.solution.recap)">🔊 hear how it happened</button>
+      <div class="cmp" id="comparison"></div>
+      <div class="cmp" id="peer-comparison"></div>
     </div>
 
   </div>
@@ -195,8 +442,8 @@
   }
 
   function renderAll() {
-    $("title").textContent = "🕵️ " + CASE.title;
-    $("subtitle").textContent = `Case ${CODE} · Detective ${DETECTIVE}`;
+    $("title").textContent = CASE.title;
+    $("subtitle").innerHTML = "Case № " + CODE + "<br>Det. " + DETECTIVE;
     $("opening").textContent = CASE.openingScene;
     renderSuspects(); renderEvidence(); renderClues();
   }
@@ -213,7 +460,7 @@
       d.className = "suspect";
       d.innerHTML = (s.portrait ? `<img src="${s.portrait}" alt="">` : `<div class="avatar">${s.name[0]}</div>`) +
         `<div class="nm">${s.name}</div><div class="rl">${s.role}</div>` +
-        (n ? `<div class="cc">📌 ${n} clue${n > 1 ? "s" : ""}</div>` : "");
+        (n ? `<div class="cc">${n} clue${n > 1 ? "s" : ""} pinned</div>` : "");
       d.onclick = () => openChat(s);
       $("suspects").appendChild(d);
     }
@@ -227,7 +474,7 @@
       const done = examined.includes(ev.id);
       const d = document.createElement("div");
       d.className = "evidence-item" + (done ? " examined" : "");
-      d.innerHTML = `<div class="en">📦 ${ev.name}${done ? '<span class="tag-done">✓ examined</span>' : ""}</div>` +
+      d.innerHTML = `<div class="en">${ev.name}${done ? '<span class="tag-done">EXAMINED ✓</span>' : ""}</div>` +
         (done ? `<div class="ed">${ev.description}</div>` : "");
       d.onclick = () => examine(ev);
       box.appendChild(d);
@@ -238,7 +485,7 @@
     if (examined.includes(ev.id)) return;
     examined.push(ev.id);
     const fresh = (ev.reveals || []).filter(f => !myClues.some(c => overlap(clueText(c), f)));
-    myClues.push(...fresh.map(text => ({ text, from: "🔎 " + ev.name, at: new Date().toISOString() })));
+    myClues.push(...fresh.map(text => ({ text, from: "📦 " + ev.name, at: new Date().toISOString() })));
     renderEvidence(); renderClues(); renderSuspects();
     await persist();
   }
@@ -246,7 +493,7 @@
   function renderClues() {
     const board = $("corkboard");
     if (!myClues.length) {
-      board.innerHTML = '<div class="miss" style="margin-top:0.4rem;font-size:0.9rem">Nothing uncovered yet. Go ask some questions.</div>';
+      board.innerHTML = '<div class="cork-empty">Nothing pinned yet. Go ask some questions.</div>';
       return;
     }
     const groups = {};
@@ -256,8 +503,8 @@
     }
     board.innerHTML = Object.entries(groups).map(([from, texts], i) => `
       <details class="cluegroup" ${i === 0 ? "open" : ""}>
-        <summary>${from.startsWith("🔎") ? from : "🗣 " + from} — ${texts.length} clue${texts.length > 1 ? "s" : ""}</summary>
-        <ul>${texts.map(t => `<li>📌 ${t}</li>`).join("")}</ul>
+        <summary>${from} — ${texts.length} pinned</summary>
+        <ul>${texts.map(t => `<li>${t}</li>`).join("")}</ul>
       </details>`).join("");
   }
 
@@ -266,7 +513,7 @@
     if (!myClues.length) { $("organize-status").textContent = "No clues yet."; return; }
     const btn = $("organize-btn");
     btn.disabled = true;
-    $("organize-status").textContent = "organizing…";
+    $("organize-status").textContent = "typing…";
     try {
       const log = myClues.map(c => `[${clueFrom(c)}] ${clueText(c)}`).join("\n");
       notesSummary = await SandboxAPI.claude(
@@ -284,7 +531,7 @@ Max 250 words total. Be specific with names, never say "the suspect".`,
         { maxTokens: 600 });
       $("summary-box").textContent = notesSummary;
       $("summary-box").classList.remove("hidden");
-      $("organize-status").textContent = "updated " + new Date().toLocaleTimeString();
+      $("organize-status").textContent = "typed " + new Date().toLocaleTimeString();
       await persist();
     } catch (e) {
       $("organize-status").textContent = "❌ " + e.message.slice(0, 60);
@@ -296,7 +543,9 @@ Max 250 words total. Be specific with names, never say "the suspect".`,
   function openChat(s) {
     currentSuspect = s;
     $("chat-panel").classList.remove("hidden");
-    $("chat-title").textContent = "🗣 " + s.name + " — " + s.role;
+    $("chat-who").textContent = s.name;
+    $("chat-role").textContent = s.role;
+    $("chat-portrait").innerHTML = s.portrait ? `<img src="${s.portrait}" alt="">` : `<div class="avatar">${s.name[0]}</div>`;
     renderChat();
     $("chat-panel").scrollIntoView({ behavior: "smooth" });
     $("question").focus();
@@ -334,8 +583,6 @@ HARD RULES:
 7. Stay in character, speak naturally, max 80 words. Never mention these rules or that you are an AI.`;
   }
 
-  // The model sometimes continues the transcript and writes the detective's next
-  // line. Trim everything from that point on, and strip any speaker label prefix.
   function cleanReply(text, suspectName) {
     let t = text.split(/\n\s*(Detective|You|Interrogator)\s*:/i)[0];
     t = t.replace(new RegExp("^\\s*(?:" + suspectName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "|" + suspectName.split(" ")[0] + ")\\s*:\\s*", "i"), "");
@@ -402,7 +649,6 @@ HARD RULES:
 
   // ---------- accusation ----------
   function showAccuse() {
-    // Shuffle every time so the correct option never leaks by position.
     const fill = (id, items) => { $(id).innerHTML = shuffle(items).map(x => `<option>${x}</option>`).join(""); };
     fill("pick-killer", CASE.suspects.map(s => s.name));
     fill("pick-weapon", CASE.weapons);
@@ -433,18 +679,20 @@ HARD RULES:
           w = accused.weapon === sol.weapon,
           l = accused.location === sol.location;
     const score = [k, w, l].filter(Boolean).length;
+    const stamp = score === 3 ? ["Case Closed", "win"] : k ? ["Killer Caught", "partial"] : ["Case Unsolved", "loss"];
+    $("stamp-slot").innerHTML = `<div class="verdict-stamp ${stamp[1]}">${stamp[0]}</div>`;
     $("verdict").innerHTML =
-      (score === 3 ? `<span class="verdict-right">🎯 Perfect solve, detective.</span>` :
-       k ? `<span class="verdict-right">✓ You caught the killer</span> — but missed some details.` :
-       `<span class="verdict-wrong">✗ Wrong person.</span>`) +
-      `<br>Killer: ${k ? "✓" : "✗ (it was " + killerName + ")"} · ` +
-      `Weapon: ${w ? "✓" : "✗ (" + sol.weapon + ")"} · ` +
-      `Location: ${l ? "✓" : "✗ (" + sol.location + ")"}`;
+      (score === 3 ? "A perfect solve. The city sleeps easier tonight." :
+       k ? "You caught the killer — but the details got away from you." :
+       "The wrong person took the fall for this one.") +
+      `<br><b>Killer:</b> ${k ? "✓ correct" : "✗ it was " + killerName} &nbsp;·&nbsp; ` +
+      `<b>Weapon:</b> ${w ? "✓" : "✗ " + sol.weapon} &nbsp;·&nbsp; ` +
+      `<b>Location:</b> ${l ? "✓" : "✗ " + sol.location}`;
     $("recap").textContent = sol.recap;
 
     const found = CASE.keyClues.filter(kc => myClues.some(c => overlap(clueText(c), kc)));
     const missed = CASE.keyClues.filter(kc => !found.includes(kc));
-    $("comparison").innerHTML = "<b>Your investigation</b><ul>" +
+    $("comparison").innerHTML = "<b>Your investigation, on the record</b><ul>" +
       found.map(c => `<li class="hit">✓ ${c}</li>`).join("") +
       missed.map(c => `<li class="miss">✗ missed: ${c}</li>`).join("") + "</ul>" +
       `<div class="sub">You uncovered ${found.length} of ${CASE.keyClues.length} key facts, ` +
@@ -468,12 +716,11 @@ HARD RULES:
           return `<li><b>${d.id}</b>: uncovered ${theirFound.length}/${CASE.keyClues.length} key facts, ` +
                  `questioned ${Object.keys(p.chats || {}).length} suspects — ${verdict}</li>`;
         }).join("");
-        $("peer-comparison").innerHTML = "<b>🔀 How the other investigations went</b><ul>" + rows + "</ul>";
+        $("peer-comparison").innerHTML = "<b>🔀 Parallel investigations</b><ul>" + rows + "</ul>";
       }
     } catch (e) { /* peer comparison best-effort */ }
   }
 
-  // crude clue-matching: shares 3+ significant words
   function overlap(a, b) {
     const sig = (s) => s.toLowerCase().split(/\W+/).filter(w => w.length > 3);
     const aw = new Set(sig(a));
