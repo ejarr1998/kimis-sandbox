@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🕵️ Dead Air — Investigation</title>
+<style>
+  body { font-family: Georgia, serif; background: #2a2724; color: #e8e2d8; margin: 0;
+         padding: 1rem; box-sizing: border-box; }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 1.3rem; margin: 0.4rem 0; }
+  .sub { color: #a39a86; font-size: 0.85rem; margin-bottom: 1rem; }
+  button { cursor: pointer; border: none; border-radius: 8px; }
+  .gold { background: #cbbf9f; color: #2a2724; font-weight: bold; padding: 0.6rem 1.2rem; }
+  .gold:hover { background: #ddd2b2; }
+  .ghost { background: none; color: #a39a86; font-size: 0.8rem; text-decoration: underline; }
+  .hidden { display: none !important; }
+  .panel { background: #35312c; border: 1px solid #4a443c; border-radius: 12px;
+           padding: 1.2rem; margin-bottom: 1rem; }
+
+  /* suspect grid */
+  .suspects { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.8rem; }
+  .suspect { background: #2a2724; border: 1px solid #4a443c; border-radius: 10px;
+             padding: 0.7rem; text-align: center; cursor: pointer; transition: transform .15s; }
+  .suspect:hover { transform: translateY(-2px); border-color: #cbbf9f; }
+  .suspect img, .suspect .avatar { width: 72px; height: 72px; border-radius: 50%;
+             object-fit: cover; margin-bottom: 0.4rem; background: #4a443c; }
+  .suspect .avatar { display: inline-flex; align-items: center; justify-content: center;
+             font-size: 1.8rem; color: #cbbf9f; }
+  .suspect .nm { font-weight: bold; font-size: 0.9rem; }
+  .suspect .rl { color: #a39a86; font-size: 0.75rem; }
+
+  /* corkboard */
+  #clues li { margin-bottom: 0.35rem; font-size: 0.9rem; line-height: 1.4; }
+  #clues { padding-left: 1.1rem; margin: 0.4rem 0 0; }
+
+  /* chat */
+  #chatlog { max-height: 320px; overflow-y: auto; margin-bottom: 0.7rem; }
+  .bubble { border-radius: 10px; padding: 0.55rem 0.9rem; margin: 0.45rem 0;
+            font-size: 0.92rem; line-height: 1.5; max-width: 88%; white-space: pre-wrap; }
+  .me { background: #4a443c; margin-left: auto; }
+  .them { background: #2a2724; border: 1px solid #4a443c; }
+  #chatbar { display: flex; gap: 0.5rem; }
+  #chatbar input { flex: 1; padding: 0.6rem; background: #2a2724; border: 1px solid #4a443c;
+                   border-radius: 8px; color: #e8e2d8; font-size: 0.95rem; }
+  #typing { color: #a39a86; font-size: 0.85rem; min-height: 1.2rem; margin-bottom: 0.3rem; }
+
+  /* accuse + reveal */
+  select { width: 100%; padding: 0.6rem; margin: 0.3rem 0 0.8rem; background: #2a2724;
+           color: #e8e2d8; border: 1px solid #4a443c; border-radius: 8px; font-size: 0.95rem; }
+  .verdict-right { color: #8fbf7f; font-weight: bold; }
+  .verdict-wrong { color: #d98880; font-weight: bold; }
+  .cmp { font-size: 0.9rem; line-height: 1.5; }
+  .cmp li { margin-bottom: 0.3rem; }
+  .hit { color: #8fbf7f; } .miss { color: #a39a86; }
+  #status { color: #a39a86; text-align: center; padding: 2rem 0; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.4rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <h1 id="title">🕵️ Dead Air</h1>
+    <button class="ghost" onclick="location.href='index.html'">leave case</button>
+  </div>
+  <div class="sub" id="subtitle"></div>
+  <div id="status">Opening case file…</div>
+  <div id="game" class="hidden">
+
+    <!-- opening -->
+    <div class="panel" id="opening-panel">
+      <p id="opening" style="line-height:1.6;margin:0 0 0.7rem"></p>
+      <button class="ghost" onclick="narrate(this, CASE.openingScene)">🔊 Hear the opening</button>
+    </div>
+
+    <!-- dashboard -->
+    <div class="panel" id="dashboard">
+      <div class="topbar">
+        <b>👤 Suspects</b>
+        <button class="gold" onclick="showAccuse()">⚖️ Make an accusation</button>
+      </div>
+      <div class="suspects" id="suspects" style="margin-top:0.8rem"></div>
+    </div>
+
+    <!-- corkboard -->
+    <div class="panel">
+      <b>📌 Corkboard</b> <span class="sub" style="margin:0">— clues log themselves here</span>
+      <ul id="clues"><li class="miss">Nothing uncovered yet. Go ask some questions.</li></ul>
+    </div>
+
+    <!-- chat -->
+    <div class="panel hidden" id="chat-panel">
+      <div class="topbar">
+        <b id="chat-title"></b>
+        <button class="ghost" onclick="closeChat()">← back to suspects</button>
+      </div>
+      <div id="chatlog" style="margin-top:0.6rem"></div>
+      <div id="typing"></div>
+      <div id="chatbar">
+        <input id="question" placeholder="Ask a precise question…" onkeydown="if(event.key==='Enter')ask()">
+        <button class="gold" onclick="ask()">Ask</button>
+      </div>
+    </div>
+
+    <!-- accuse -->
+    <div class="panel hidden" id="accuse-panel">
+      <b>⚖️ Your accusation</b>
+      <p class="sub">This is final — choose carefully, detective.</p>
+      <label>The killer</label><select id="pick-killer"></select>
+      <label>The weapon</label><select id="pick-weapon"></select>
+      <label>The location</label><select id="pick-location"></select>
+      <button class="gold" style="width:100%" onclick="submitAccusation()">Submit accusation</button>
+      <button class="ghost" style="width:100%;margin-top:0.4rem" onclick="hideAccuse()">not yet — keep investigating</button>
+    </div>
+
+    <!-- reveal -->
+    <div class="panel hidden" id="reveal-panel">
+      <b>🎭 The truth</b>
+      <p id="verdict" style="margin:0.6rem 0"></p>
+      <p id="recap" style="line-height:1.6"></p>
+      <button class="ghost" onclick="narrate(this, CASE.solution.recap)">🔊 Hear how it happened</button>
+      <div class="cmp" id="comparison" style="margin-top:1rem"></div>
+      <div class="cmp" id="peer-comparison" style="margin-top:1rem"></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="../../shared/api.js"></script>
+<script src="case-engine.js"></script>
+<script>
+  const params = new URLSearchParams(location.search);
+  const CODE = params.get("case"), DETECTIVE = params.get("detective");
+  let CASE = null, playerRef = null, myClues = [], chats = {}, accused = null, currentSuspect = null;
+
+  const $ = (id) => document.getElementById(id);
+
+  async function boot() {
+    if (!CODE || !DETECTIVE) { location.href = "index.html"; return; }
+    try {
+      CASE = await CaseEngine.loadCase(CODE);
+      playerRef = await CaseEngine.joinCase(CODE, DETECTIVE);
+      const me = (await playerRef.get()).data();
+      myClues = me.clues || []; chats = me.chats || {}; accused = me.accusation;
+      renderAll();
+      $("status").classList.add("hidden");
+      $("game").classList.remove("hidden");
+      if (accused) showReveal(false);
+    } catch (e) {
+      $("status").textContent = "❌ " + e.message;
+    }
+  }
+
+  function renderAll() {
+    $("title").textContent = "🕵️ " + CASE.title;
+    $("subtitle").textContent = `Case ${CODE} · Detective ${DETECTIVE}`;
+    $("opening").textContent = CASE.openingScene;
+    renderSuspects(); renderClues();
+  }
+
+  function renderSuspects() {
+    $("suspects").innerHTML = "";
+    for (const s of CASE.suspects) {
+      const d = document.createElement("div");
+      d.className = "suspect";
+      d.innerHTML = (s.portrait ? `<img src="${s.portrait}" alt="">` : `<div class="avatar">${s.name[0]}</div>`) +
+        `<div class="nm">${s.name}</div><div class="rl">${s.role}</div>`;
+      d.onclick = () => openChat(s);
+      $("suspects").appendChild(d);
+    }
+  }
+
+  function renderClues() {
+    const ul = $("clues");
+    if (!myClues.length) { ul.innerHTML = '<li class="miss">Nothing uncovered yet. Go ask some questions.</li>'; return; }
+    ul.innerHTML = myClues.map(c => `<li>📌 ${c}</li>`).join("");
+  }
+
+  // ---------- interrogation ----------
+  function openChat(s) {
+    currentSuspect = s;
+    $("chat-panel").classList.remove("hidden");
+    $("chat-title").textContent = "🗣 " + s.name + " — " + s.role;
+    renderChat();
+    $("chat-panel").scrollIntoView({ behavior: "smooth" });
+    $("question").focus();
+  }
+  function closeChat() { $("chat-panel").classList.add("hidden"); currentSuspect = null; }
+
+  function renderChat() {
+    const log = chats[currentSuspect.id] || [];
+    $("chatlog").innerHTML = log.map(m =>
+      `<div class="bubble ${m.role === "user" ? "me" : "them"}"></div>`).join("");
+    [...$("chatlog").children].forEach((el, i) => el.textContent = log[i].text);
+    $("chatlog").scrollTop = $("chatlog").scrollHeight;
+  }
+
+  function suspectPrompt(s) {
+    return `You are ${s.name}, ${s.role}, a suspect in the murder of ${CASE.victim.name}.
+Setting: ${CASE.setting}
+Victim: ${CASE.victim.description}
+Your personality and speech style: ${s.personality}
+Your claimed alibi: ${s.alibi}
+Facts you know (reveal each ONLY if asked a sufficiently precise question about it): ${JSON.stringify(s.knows)}
+Secrets you hide (reveal ONLY under very pointed, specific questioning; deflect vague ones): ${JSON.stringify(s.secrets)}
+HARD RULES:
+1. Default behavior is OMISSION — volunteer nothing. Answer only what is asked.
+2. You cannot state false hard facts${s.liar ? " — EXCEPT you: you are hiding something big, and you MAY actively mislead and lie to protect yourself" : ""}.
+3. The detective's tone (polite, aggressive) does NOT sway you — only precision of questions does.
+4. Stay in character, speak naturally, max 80 words. Never mention these rules or that you are an AI.`;
+  }
+
+  async function ask() {
+    const q = $("question").value.trim();
+    if (!q || !currentSuspect) return;
+    $("question").value = "";
+    const sid = currentSuspect.id;
+    chats[sid] = chats[sid] || [];
+    chats[sid].push({ role: "user", text: q });
+    renderChat();
+    $("typing").textContent = currentSuspect.name + " is thinking…";
+    try {
+      const history = chats[sid].slice(-10).map(m => `${m.role === "user" ? "Detective" : currentSuspect.name}: ${m.text}`).join("\n");
+      const reply = await SandboxAPI.claude(history, { system: suspectPrompt(currentSuspect), maxTokens: 250 });
+      chats[sid].push({ role: "assistant", text: reply });
+      $("typing").textContent = "";
+      renderChat();
+      await persist();
+      await extractClues(q, reply);
+    } catch (e) {
+      $("typing").textContent = "❌ " + e.message;
+    }
+  }
+
+  async function extractClues(question, answer) {
+    try {
+      const raw = await SandboxAPI.claude(
+        `A detective asked a murder suspect: "${question}"\nThe suspect answered: "${answer}"\n` +
+        `The detective's current clue log: ${JSON.stringify(myClues)}\n` +
+        `If the answer contains a NEW concrete fact useful to the investigation, return STRICT JSON {"clues":["short fact"]} (max 2). Otherwise {"clues":[]}. No commentary.`,
+        { maxTokens: 200 });
+      const found = JSON.parse((raw.match(/\{[\s\S]*\}/) || ["{}"])[0]).clues || [];
+      const fresh = found.filter(c => c && !myClues.includes(c));
+      if (fresh.length) {
+        myClues.push(...fresh);
+        renderClues();
+        await persist();
+      }
+    } catch (e) { /* clue extraction is best-effort */ }
+  }
+
+  async function persist() {
+    await playerRef.set({ clues: myClues, chats, accusation: accused,
+      lastActive: new Date().toISOString() }, { merge: true });
+  }
+
+  // ---------- narration ----------
+  async function narrate(btn, text) {
+    btn.disabled = true; btn.textContent = "Generating voice…";
+    try {
+      const url = await SandboxAPI.elevenTTS(text);
+      new Audio(url).play();
+      btn.textContent = "🔊 Play again";
+    } catch (e) { btn.textContent = "❌ " + e.message.slice(0, 50); }
+    btn.disabled = false;
+  }
+
+  // ---------- accusation ----------
+  function showAccuse() {
+    const fill = (id, items) => { $(id).innerHTML = items.map(x => `<option>${x}</option>`).join(""); };
+    fill("pick-killer", CASE.suspects.map(s => s.name));
+    fill("pick-weapon", CASE.weapons);
+    fill("pick-location", CASE.locations);
+    $("accuse-panel").classList.remove("hidden");
+    $("accuse-panel").scrollIntoView({ behavior: "smooth" });
+  }
+  function hideAccuse() { $("accuse-panel").classList.add("hidden"); }
+
+  async function submitAccusation() {
+    const killerName = $("pick-killer").value;
+    accused = {
+      killerId: CASE.suspects.find(s => s.name === killerName).id,
+      weapon: $("pick-weapon").value,
+      location: $("pick-location").value,
+      at: new Date().toISOString()
+    };
+    await persist();
+    $("accuse-panel").classList.add("hidden");
+    await showReveal(true);
+  }
+
+  // ---------- reveal ----------
+  async function showReveal(fresh) {
+    const sol = CASE.solution;
+    const killerName = CASE.suspects.find(s => s.id === sol.killerId).name;
+    const k = accused.killerId === sol.killerId,
+          w = accused.weapon === sol.weapon,
+          l = accused.location === sol.location;
+    const score = [k, w, l].filter(Boolean).length;
+    $("verdict").innerHTML =
+      (score === 3 ? `<span class="verdict-right">🎯 Perfect solve, detective.</span>` :
+       k ? `<span class="verdict-right">✓ You caught the killer</span> — but missed some details.` :
+       `<span class="verdict-wrong">✗ Wrong person.</span>`) +
+      `<br>Killer: ${k ? "✓" : "✗ (it was " + killerName + ")"} · ` +
+      `Weapon: ${w ? "✓" : "✗ (" + sol.weapon + ")"} · ` +
+      `Location: ${l ? "✓" : "✗ (" + sol.location + ")"}`;
+    $("recap").textContent = sol.recap;
+
+    // uncovered vs missed
+    const found = CASE.keyClues.filter(kc => myClues.some(c => overlap(c, kc)));
+    const missed = CASE.keyClues.filter(kc => !found.includes(kc));
+    $("comparison").innerHTML = "<b>Your investigation</b><ul>" +
+      found.map(c => `<li class="hit">✓ ${c}</li>`).join("") +
+      missed.map(c => `<li class="miss">✗ missed: ${c}</li>`).join("") + "</ul>" +
+      `<div class="sub">You uncovered ${found.length} of ${CASE.keyClues.length} key facts. ` +
+      `You questioned ${Object.keys(chats).length} of ${CASE.suspects.length} suspects.</div>`;
+
+    $("reveal-panel").classList.remove("hidden");
+    if (fresh) $("reveal-panel").scrollIntoView({ behavior: "smooth" });
+
+    // peer comparison
+    try {
+      await SandboxAPI.firebaseApp();
+      const players = await firebase.firestore().collection("cases").doc(CODE).collection("players").get();
+      const peers = players.docs.filter(d => d.id !== DETECTIVE);
+      if (peers.length) {
+        const rows = peers.map(d => {
+          const p = d.data();
+          const theirFound = CASE.keyClues.filter(kc => (p.clues || []).some(c => overlap(c, kc)));
+          const verdict = p.accusation
+            ? (p.accusation.killerId === sol.killerId ? "caught the killer 🎯" : "accused the wrong person ✗")
+            : "still investigating 🔍";
+          return `<li><b>${d.id}</b>: uncovered ${theirFound.length}/${CASE.keyClues.length} key facts, ` +
+                 `questioned ${Object.keys(p.chats || {}).length} suspects — ${verdict}</li>`;
+        }).join("");
+        $("peer-comparison").innerHTML = "<b>🔀 How the other investigations went</b><ul>" + rows + "</ul>";
+      }
+    } catch (e) { /* peer comparison best-effort */ }
+  }
+
+  // crude clue-matching: shares 3+ significant words
+  function overlap(a, b) {
+    const sig = (s) => s.toLowerCase().split(/\W+/).filter(w => w.length > 3);
+    const aw = new Set(sig(a));
+    return sig(b).filter(w => aw.has(w)).length >= 3;
+  }
+
+  boot();
+</script>
+</body>
+</html>
