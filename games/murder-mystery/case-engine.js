@@ -104,6 +104,7 @@ Requirements:
 - Distribute clues so at least 3 different suspects hold pieces of the solution.
 - Suspects must NEVER need to reference people outside the 6 suspects and the victim — if a fact needs a source, it belongs in an evidence item, not an invented bystander.
 - Red herrings welcome, but they must be resolvable as innocent.
+- Each suspect MUST have a UNIQUE name — no two suspects may share a first or last name.
 - NAMES: each character has exactly ONE full name, used identically in every field of the document. Double-check every mention before finishing — a name spelled two ways (e.g. "Frost" vs "Voss") is a fatal defect.
 - IMPORTANT: randomize ordering — do NOT put the killer first among suspects, and do NOT put the true weapon/location first in their lists.`;
 
@@ -111,13 +112,15 @@ Requirements:
 
 ${JSON.stringify(caseJson)}
 
-Perform THREE audits:
+Perform FOUR audits:
 
-AUDIT A — Name consistency: extract the canonical full name of every suspect and the victim. Search the ENTIRE document (all knows, secrets, alibis, evidence, keyClues, recap, openingScene) for any mention that uses a DIFFERENT or MISSPELLED variant of those names (e.g. "Voss" when the roster says "Frost"). Any near-match surname that differs from the canonical one counts as a defect. Note: a character being referred to by first name, last name, or title+last name is fine as long as the spelling matches canon.
+AUDIT A — Name consistency: extract the canonical full name of every suspect and the victim. Search the ENTIRE document (all knows, secrets, alibis, evidence, keyClues, recap, openingScene) for any mention that uses a DIFFERENT or MISSPELLED variant of those names (e.g. "Voss" when the roster says "Frost"). Any near-match surname that differs from the canonical one counts as a defect. Note: a character being referred to by first name, last name, or title+last name is fine as long as the spelling matches canon. ALSO: every suspect's name must be UNIQUE — if two suspects share a first or last name (or any confusingly similar names), report it as an issue and supply a fixes[] entry renaming the duplicate everywhere it appears.
 
 AUDIT B — World closure: no suspect's scripted facts may depend on people outside the suspect roster and victim.
 
 AUDIT C — Solvability: simulate a sharp detective who can only learn facts in suspects' "knows"/"secrets" (secrets only via very pointed questions) and evidence items' "reveals". The killer, weapon AND location must all be deducible without guessing, and every keyClue must be reachable.
+
+AUDIT D — Portrait safety: check every suspect's "physical" description (it feeds verbatim into portrait image generation). It must NOT contain anything incriminating or spoilery — e.g. bloodied clothing/items, a guilty expression, "hiding the knife", or behavior that reveals their role in the crime. If any does, report it as an issue and supply a fixes[] entry replacing the incriminating text with neutral appearance detail.
 
 Answer STRICT JSON:
 {
@@ -133,7 +136,7 @@ Answer STRICT JSON:
       "addKnowledge": "string — ONE fact to inject into that suspect's knows[] or that evidence's reveals[] to fix a logic gap" }
   ]
 }
-Rules: use fixes[] for name/consistency repairs (max 6), patches[] for solvability gaps (max 3). Set solvable=false AND consistent=false only for fundamentally broken cases with no repair path.`;
+Rules: use fixes[] for name/consistency/portrait repairs (max 6), patches[] for solvability gaps (max 3). Set solvable=false AND consistent=false only for fundamentally broken cases with no repair path.`;
 
   function extractJson(text) {
     const m = text.match(/\{[\s\S]*\}/);
@@ -150,54 +153,177 @@ Rules: use fixes[] for name/consistency repairs (max 6), patches[] for solvabili
     return a;
   }
 
+  // ---------- Deterministic structural validation ----------
+  // Runs in code (no LLM). First performs gentle auto-repairs where safe,
+  // then returns an array of remaining structural problems (empty = OK).
+  function structuralCheck(caseFile) {
+    const problems = [];
+    const suspects = Array.isArray(caseFile.suspects) ? caseFile.suspects : [];
+    const solution = caseFile.solution || {};
+    const weapons = Array.isArray(caseFile.weapons) ? caseFile.weapons : [];
+    const locations = Array.isArray(caseFile.locations) ? caseFile.locations : [];
+    const evidence = Array.isArray(caseFile.evidence) ? caseFile.evidence : [];
+
+    // Gentle auto-repair: trim exact-match whitespace on weapon/location.
+    if (typeof solution.weapon === "string") {
+      const trimmed = solution.weapon.trim();
+      if (weapons.includes(trimmed)) solution.weapon = trimmed;
+    }
+    if (typeof solution.location === "string") {
+      const trimmed = solution.location.trim();
+      if (locations.includes(trimmed)) solution.location = trimmed;
+    }
+    // Gentle auto-repair: if killerId doesn't match but exactly one suspect
+    // is flagged liar:true, that suspect is the intended killer.
+    const liars = suspects.filter(s => s.liar === true);
+    if (!suspects.some(s => s.id === solution.killerId) && liars.length === 1) {
+      solution.killerId = liars[0].id;
+    }
+
+    if (suspects.length !== 6) {
+      problems.push(`expected exactly 6 suspects, got ${suspects.length}`);
+    }
+    const ids = suspects.map(s => s.id);
+    if (new Set(ids).size !== ids.length) {
+      problems.push("suspect ids are not unique");
+    }
+    const names = suspects.map(s => (s.name || "").trim().toLowerCase());
+    if (new Set(names).size !== names.length) {
+      problems.push("suspect names are not unique");
+    }
+    if (liars.length < 1 || liars.length > 2) {
+      problems.push(`expected 1-2 suspects with liar:true (killer + optional red herring), got ${liars.length}`);
+    }
+    if (!suspects.some(s => s.id === solution.killerId)) {
+      problems.push(`solution.killerId "${solution.killerId}" matches no suspect id`);
+    }
+    if (!weapons.includes(solution.weapon)) {
+      problems.push(`solution.weapon "${solution.weapon}" is not in weapons[]`);
+    }
+    if (!locations.includes(solution.location)) {
+      problems.push(`solution.location "${solution.location}" is not in locations[]`);
+    }
+    if (evidence.length < 3 || evidence.length > 4) {
+      problems.push(`expected 3-4 evidence items, got ${evidence.length}`);
+    }
+    evidence.forEach((ev, i) => {
+      if (!Array.isArray(ev.reveals)) {
+        problems.push(`evidence[${i}] ("${ev.id || ev.name || "?"}") is missing a reveals[] array`);
+      }
+    });
+    return problems;
+  }
+
   // ---------- Stage 1: generate ----------
   // customSetting: optional host-requested setting; overrides the random deck.
   async function generateCase(onStatus, customSetting) {
     const custom = (customSetting || "").trim();
     const setting = custom || SETTINGS[Math.floor(Math.random() * SETTINGS.length)];
     onStatus?.(`🖋 Claude is writing the case… (${setting})`);
-    const raw = await SandboxAPI.claude(GEN_PROMPT(setting, !!custom), { maxTokens: 4500 });
-    const caseFile = extractJson(raw);
-    caseFile.requestedSetting = custom || null;
-    caseFile.suspects.forEach(s => { s.portrait = null; });
-    caseFile.evidence = caseFile.evidence || [];
-    // Never trust the generator's ordering — shuffle lists so answers don't leak by position.
-    caseFile.suspects = shuffle(caseFile.suspects);
-    caseFile.weapons = shuffle(caseFile.weapons);
-    caseFile.locations = shuffle(caseFile.locations);
-    return caseFile;
+
+    let lastError = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const raw = await SandboxAPI.claude(GEN_PROMPT(setting, !!custom), { maxTokens: 7000 });
+        const caseFile = extractJson(raw);
+        caseFile.requestedSetting = custom || null;
+        (caseFile.suspects || []).forEach(s => { s.portrait = null; });
+        caseFile.evidence = caseFile.evidence || [];
+        // Never trust the generator's ordering — shuffle lists so answers don't leak by position.
+        caseFile.suspects = shuffle(caseFile.suspects);
+        caseFile.weapons = shuffle(caseFile.weapons);
+        caseFile.locations = shuffle(caseFile.locations);
+        const problems = structuralCheck(caseFile);
+        if (problems.length) {
+          throw new Error("structural check failed: " + problems.join("; "));
+        }
+        return caseFile;
+      } catch (e) {
+        lastError = e;
+        if (attempt < 2) {
+          onStatus?.(`🖋 First draft flawed (${e.message}) — rewriting…`);
+        }
+      }
+    }
+    throw new Error("Case generation failed after 2 attempts. Last error: " + (lastError && lastError.message));
   }
 
   // ---------- Stage 2: validate + patch ----------
+  // Escape regex metacharacters so a `find` string is matched literally.
+  function escapeRegExp(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  // Word-boundary-aware replacement of `find` → `replace` inside one string.
+  // \b anchors fail for phrases ending/starting in punctuation, so use
+  // lookaround on non-word characters instead — works for multi-word phrases.
+  function replaceInText(text, find, replace) {
+    if (typeof text !== "string" || !find) return text;
+    const re = new RegExp(`(?<![\\w])${escapeRegExp(find)}(?![\\w])`, "g");
+    return text.replace(re, replace);
+  }
+
+  // Apply name/consistency fixes ONLY to narrative text fields — never to
+  // id fields, solution.killerId, the weapons[]/locations[] lists, or
+  // artStyle (ids and list membership must survive; artStyle/physical feed
+  // image generation so they are deliberately left alone).
   function applyFixes(caseFile, fixes) {
     let applied = 0;
     // Longest "find" first so specific phrases are replaced before bare surnames.
     const sorted = [...fixes].filter(f => f.find && f.replace && f.find !== f.replace)
       .sort((a, b) => b.find.length - a.find.length);
-    let json = JSON.stringify(caseFile);
+
+    const fixString = (s, f) => {
+      const out = replaceInText(s, f.find, f.replace);
+      if (out !== s) applied++;
+      return out;
+    };
+    const fixArray = (arr, f) => Array.isArray(arr) ? arr.map(x => fixString(x, f)) : arr;
+
     for (const f of sorted) {
-      if (json.includes(f.find)) {
-        json = json.split(f.find).join(f.replace);
-        applied++;
+      caseFile.title = fixString(caseFile.title, f);
+      caseFile.setting = fixString(caseFile.setting, f);
+      caseFile.openingScene = fixString(caseFile.openingScene, f);
+      if (caseFile.victim) caseFile.victim.description = fixString(caseFile.victim.description, f);
+      if (caseFile.solution) {
+        caseFile.solution.motive = fixString(caseFile.solution.motive, f);
+        caseFile.solution.recap = fixString(caseFile.solution.recap, f);
       }
+      caseFile.keyClues = fixArray(caseFile.keyClues, f);
+      (caseFile.evidence || []).forEach(ev => {
+        ev.name = fixString(ev.name, f);
+        ev.description = fixString(ev.description, f);
+        ev.reveals = fixArray(ev.reveals, f);
+      });
+      (caseFile.suspects || []).forEach(s => {
+        s.personality = fixString(s.personality, f);
+        s.alibi = fixString(s.alibi, f);
+        s.physical = fixString(s.physical, f);
+        s.knows = fixArray(s.knows, f);
+        s.secrets = fixArray(s.secrets, f);
+      });
     }
-    return { caseFile: JSON.parse(json), applied };
+    return { caseFile, applied };
   }
 
   async function validateAndPatch(caseFile, onStatus) {
+    // NOTE: this throws on unrepairable cases — the caller (lobby) treats
+    // the thrown error as fatal and surfaces its message to the host.
     for (let attempt = 1; attempt <= 3; attempt++) {
       onStatus?.(`🔍 Case audit (pass ${attempt})…`);
       const raw = await SandboxAPI.claude(VALIDATE_PROMPT(caseFile), { maxTokens: 2000 });
       const verdict = extractJson(raw);
-      const needsFix = verdict.consistent === false && (verdict.fixes || []).length > 0;
-      if (verdict.solvable && !needsFix) return { caseFile, issues: verdict.issues || [] };
+      const fixes = verdict.fixes || [];
+      if (verdict.solvable && verdict.consistent !== false && fixes.length === 0) {
+        return { caseFile, issues: verdict.issues || [] };
+      }
 
       let changed = false;
-      if (needsFix) {
-        const res = applyFixes(caseFile, verdict.fixes);
+      if (fixes.length) {
+        const res = applyFixes(caseFile, fixes);
         caseFile = res.caseFile;
         changed = res.applied > 0;
-        onStatus?.(`✏️ Name consistency repairs: ${res.applied}…`);
+        onStatus?.(`✏️ Consistency repairs: ${res.applied}…`);
       }
       const patches = verdict.patches || [];
       if (!verdict.solvable && patches.length) {
@@ -214,6 +340,11 @@ Rules: use fixes[] for name/consistency repairs (max 6), patches[] for solvabili
       }
       if (!changed) {
         throw new Error("Case failed audit and could not be repaired: " + (verdict.issues || []).join("; "));
+      }
+      // Re-check structure after repairs so a fix can never corrupt the case.
+      const problems = structuralCheck(caseFile);
+      if (problems.length) {
+        throw new Error("Case audit repairs broke case structure: " + problems.join("; "));
       }
     }
     throw new Error("Case still failing audit after 3 repair attempts.");
@@ -244,7 +375,14 @@ Rules: use fixes[] for name/consistency repairs (max 6), patches[] for solvabili
   async function saveCase(caseFile) {
     await SandboxAPI.firebaseApp();
     const db = firebase.firestore();
-    const code = makeCode();
+    // Collision guard: never overwrite an existing case under a reused code.
+    let code = null;
+    for (let i = 0; i < 5; i++) {
+      const candidate = makeCode();
+      const snap = await db.collection("cases").doc(candidate).get();
+      if (!snap.exists) { code = candidate; break; }
+    }
+    if (!code) throw new Error("Could not allocate a free case code after 5 tries.");
     await db.collection("cases").doc(code).set({
       ...caseFile,
       status: "ready",
@@ -260,10 +398,19 @@ Rules: use fixes[] for name/consistency repairs (max 6), patches[] for solvabili
     return snap.data();
   }
 
+  // Generous allowlist for detective names: letters (any script), numbers,
+  // spaces, hyphen, underscore, apostrophe. Rejects /, ., .. etc. so the
+  // name is always a safe Firestore document id.
+  const DETECTIVE_NAME_RE = /^[\p{L}\p{N} _\-']+$/u;
+
   async function joinCase(code, detectiveName) {
+    const name = (detectiveName || "").trim().slice(0, 24);
+    if (!name || !DETECTIVE_NAME_RE.test(name)) {
+      throw new Error("Invalid detective name");
+    }
     await SandboxAPI.firebaseApp();
     const ref = firebase.firestore().collection("cases").doc(code.toUpperCase().trim())
-      .collection("players").doc(detectiveName.trim());
+      .collection("players").doc(name);
     const snap = await ref.get();
     if (!snap.exists) {
       await ref.set({ joinedAt: new Date().toISOString(), clues: [], chats: {}, examined: [], accusation: null });
