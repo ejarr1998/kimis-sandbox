@@ -95,7 +95,9 @@
         a.volume = def.vol;
         a.loop = !!def.loop;
         sfxCache[name] = a;
-      } catch (e) { /* silent — sound is garnish */ }
+      } catch (e) {
+        console.warn("[Dead Air] SFX '" + name + "' failed to generate:", e && e.message ? e.message : e);
+      }
     }));
     if (soundOn && sfxCache.rain) sfxCache.rain.play().catch(() => {});
   }
