@@ -344,6 +344,64 @@
   }
   #organize-status { color: #c9b788; font-size: 0.8rem; }
 
+  /* ---------- zone focus (hover zoom + fullscreen focus mode) ---------- */
+  .panel-title { user-select: none; }
+  .expand-btn {
+    background: none; color: inherit; opacity: 0.7;
+    border: 1px solid transparent; border-radius: 3px;
+    font-size: 0.85rem; line-height: 1; padding: 0.12rem 0.45rem;
+    letter-spacing: normal; flex: none;
+  }
+  .expand-btn:hover { border-color: currentColor; opacity: 1; }
+  @media (max-width: 759px) { .expand-btn { display: none; } }
+  /* hover zoom: desktop + hover-capable only; the dossier tilt lives on the
+     inner .panel so scaling the .zone wrapper composes without losing it */
+  @media (hover: hover) and (min-width: 760px) {
+    #game.desk .zone { transition: transform .25s ease, filter .25s ease; }
+    #game.desk .zone > .panel { transition: box-shadow .25s ease; }
+    #game.desk .zone:not(.focused):hover { transform: scale(1.02); filter: brightness(1.03); }
+    #game.desk .zone:not(.focused):hover > .panel {
+      box-shadow: 0 14px 38px rgba(0,0,0,0.6), 0 0 42px rgba(201,168,106,0.10);
+    }
+    #game.desk .zone:not(.focused) .panel-title { cursor: zoom-in; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #game.desk .zone:not(.focused):hover { transform: none; filter: none; }
+    #game.desk .zone, #game.desk .zone > .panel { transition: none; }
+  }
+  #zone-backdrop {
+    position: fixed; inset: 0; z-index: 85;
+    background: rgba(22,19,15,0.85);
+    opacity: 0; pointer-events: none;
+    transition: opacity .25s ease;
+  }
+  #zone-backdrop.on { opacity: 1; pointer-events: auto; }
+  .zone.focused {
+    position: fixed; z-index: 90; top: 3vh; left: 50%;
+    transform: translateX(-50%);
+    width: min(1080px, 94vw);
+    max-height: 94vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 6px;
+  }
+  .zone.focused > .panel { margin-bottom: 0; animation: none; }
+  .zone.focused .expand-btn { display: none; }
+  .zone.focused #boardfield { min-height: 66vh; }
+  .zone-back-btn {
+    display: none;
+    margin-top: 0.9rem;
+    background: none; color: var(--brass);
+    border: 1px solid var(--brass); border-radius: 3px;
+    font-family: "Special Elite", monospace; font-size: 0.75rem;
+    letter-spacing: 0.15em; text-transform: uppercase;
+    padding: 0.45rem 0.9rem;
+  }
+  .zone.focused .zone-back-btn { display: inline-block; }
+  .zone-back-btn:hover { background: rgba(201,168,106,0.12); }
+  .paper-doc .zone-back-btn { color: var(--red); border-color: var(--red); }
+  .paper-doc .zone-back-btn:hover { background: rgba(138,47,43,0.08); }
+
   /* ---------- overlays (rooms) ---------- */
   .overlay {
     position: fixed; inset: 0; z-index: 100;
@@ -1008,8 +1066,77 @@
       document.body.classList.remove("room-open");
   }
 
+  // ---------- zone focus (hover zoom is CSS; this is fullscreen focus mode) ----------
+  let focusedZone = null;
+  function zoneBackdrop() {
+    let bd = $("zone-backdrop");
+    if (!bd) {
+      bd = document.createElement("div");
+      bd.id = "zone-backdrop";
+      bd.addEventListener("click", collapseZone);
+      document.body.appendChild(bd);
+    }
+    return bd;
+  }
+  function expandZone(zone) {
+    if (!zone) return;
+    if (focusedZone === zone) { collapseZone(); return; }
+    if (focusedZone) focusedZone.classList.remove("focused"); // one at a time
+    focusedZone = zone;
+    zone.classList.add("focused");
+    zoneBackdrop().classList.add("on");
+    document.body.style.overflow = "hidden";
+    const panel = zone.querySelector(":scope > .panel");
+    if (panel && !panel.querySelector(":scope > .zone-back-btn")) {
+      const back = el("button", "zone-back-btn", "✕ back to the desk");
+      back.type = "button";
+      back.setAttribute("aria-label", "Back to the desk");
+      back.addEventListener("click", (e) => { e.stopPropagation(); collapseZone(); });
+      panel.appendChild(back);
+    }
+    if (gsapOK()) {
+      window.gsap.fromTo(zone, { opacity: 0, y: 26 },
+        { opacity: 1, y: 0, duration: 0.32, ease: "power3.out", clearProps: "opacity" });
+    }
+    if (zone.classList.contains("zone-board"))
+      requestAnimationFrame(() => requestAnimationFrame(drawStrings));
+  }
+  function collapseZone() {
+    if (!focusedZone) return;
+    const wasBoard = focusedZone.classList.contains("zone-board");
+    focusedZone.classList.remove("focused");
+    focusedZone = null;
+    const bd = $("zone-backdrop");
+    if (bd) bd.classList.remove("on");
+    document.body.style.overflow = "";
+    if (wasBoard)
+      requestAnimationFrame(() => requestAnimationFrame(drawStrings));
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && focusedZone) collapseZone();
+  });
+  // ⤢ button in each zone header + click-to-expand on the title bar itself.
+  // Expansion is bound to the header only, so dragging notes etc. can't trigger it.
+  function initZoneFocus() {
+    for (const zone of document.querySelectorAll("#game .zone")) {
+      const title = zone.querySelector(":scope > .panel > .panel-title");
+      if (!title) continue;
+      const btn = el("button", "expand-btn", "⤢");
+      btn.type = "button";
+      btn.setAttribute("aria-label", "Expand");
+      btn.addEventListener("click", (e) => { e.stopPropagation(); expandZone(zone); });
+      title.appendChild(btn);
+      title.addEventListener("click", (e) => {
+        if (e.target.closest("button, a, input, select, textarea")) return;
+        if (zone.classList.contains("focused")) return;
+        expandZone(zone);
+      });
+    }
+  }
+
   // ---------- mobile tabs ----------
   function showTab(name) {
+    collapseZone(); // tabs own the layout on mobile; never leave a zone stuck focused
     for (const z of document.querySelectorAll("#game .zone"))
       z.classList.toggle("active", z.dataset.tab === name);
     for (const b of document.querySelectorAll("#tabbar button"))
@@ -1754,6 +1881,7 @@ HARD RULES:
     return sig(b).filter(w => aw.has(w)).length >= 3;
   }
 
+  initZoneFocus();
   boot();
 </script>
 </body>
