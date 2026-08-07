@@ -79,3 +79,44 @@ body.coop #coop-bar { display: block; }
 .mode-opt:focus-within { outline: 2px solid var(--brass); outline-offset: 2px; }
 
 @media (max-width: 520px) { .mode-row { flex-direction: column; } }
+
+/* --- joint warrant co-signatures --- */
+#joint-sig {
+  margin: 0.9rem 0 0.2rem;
+  border-top: 1px dashed rgba(58,51,42,0.6);
+  padding-top: 0.8rem;
+}
+#joint-sig.hidden { display: none; }
+.jsig-head {
+  font-family: "Special Elite", monospace;
+  font-size: 0.62rem; letter-spacing: 0.24em; text-transform: uppercase;
+  color: #6b5f4c; margin-bottom: 0.55rem;
+}
+.jsig {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 0.4rem 0.1rem; border-bottom: 1px dotted rgba(58,51,42,0.35);
+}
+.jsig-name {
+  font-family: "Special Elite", monospace; font-size: 0.85rem;
+  color: #6b5f4c; opacity: 0.55;
+}
+.jsig-state {
+  font-size: 0.7rem; font-style: italic; color: #8a7f6b; letter-spacing: 0.04em;
+}
+/* a signature that has actually been given: ink on the page */
+.jsig.on .jsig-name {
+  opacity: 1; color: var(--red);
+  font-size: 1.15rem; transform: rotate(-1.4deg);
+  font-family: "Special Elite", monospace;
+}
+.jsig.on .jsig-state { color: var(--red); opacity: 0.75; }
+.jsig.on { animation: jsig-ink .45s ease-out; }
+@keyframes jsig-ink {
+  from { opacity: 0; transform: translateY(3px) rotate(-4deg); }
+  to   { opacity: 1; transform: none; }
+}
+#joint-note {
+  margin-top: 0.6rem; font-size: 0.76rem; font-style: italic;
+  color: #8a7f6b; line-height: 1.5; min-height: 1.1rem;
+}
+#seal-btn.signed { filter: grayscale(0.5) brightness(0.85); }

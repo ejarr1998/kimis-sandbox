@@ -256,6 +256,11 @@
           renderClues(); renderSuspects();
         });
         Coop.watchPresence(renderPresence);
+        // A sealed joint warrant is the case's verdict for everyone, so pick it
+        // up on load even if this browser wasn't open when it was signed.
+        Coop.watchWarrant((w) => {
+          if (w.sealed && w.verdict && !accused) applySealedWarrant(w);
+        });
       }
 
       renderAll();
@@ -1321,7 +1326,13 @@ HARD RULES:
 
   // ---------- accusation ----------
   function updateSealState() {
-    $("seal-btn").disabled = !(pickedKiller && $("pick-weapon").value.trim() && $("pick-location").value.trim());
+    const complete = !!(pickedKiller && $("pick-weapon").value.trim() && $("pick-location").value.trim());
+    // In coop the button doubles as "withdraw my signature", so it must stay
+    // live once signed even while the charge is being reworked.
+    if (Coop.isActive() && $("seal-btn").classList.contains("signed")) {
+      $("seal-btn").disabled = false; return;
+    }
+    $("seal-btn").disabled = !complete;
   }
 
   function renderLineup() {
@@ -1335,6 +1346,7 @@ HARD RULES:
       mug.appendChild(el("div", "mn", s.name));
       mug.appendChild(el("div", "accused-stamp", "Accused"));
       mug.tabIndex = 0;
+      mug.dataset.sid = s.id;
       mug.setAttribute("role", "radio");
       mug.setAttribute("aria-checked", "false");
       mug.setAttribute("aria-label", "Accuse " + s.name);
@@ -1348,6 +1360,9 @@ HARD RULES:
         });
         sfx("stamp");
         updateSealState();
+        // In coop this is a shared document: naming a different suspect voids
+        // any signature already on the warrant.
+        if (Coop.isActive()) Coop.updateWarrant({ killerId: s.id, killerName: s.name });
       };
       mug.onclick = pick;
       mug.onkeydown = (e) => {
@@ -1365,7 +1380,7 @@ HARD RULES:
     for (const id of ["pick-weapon", "pick-location"]) {
       const inp = $(id);
       inp.value = "";
-      inp.oninput = updateSealState;
+      inp.oninput = () => { updateSealState(); if (Coop.isActive()) pushWarrantField(id); };
     }
     $("seal-btn").innerHTML = "Press<br>the<br>Seal";
     updateSealState();
@@ -1374,6 +1389,7 @@ HARD RULES:
     $("w-victim").textContent = CASE.victim.name;
     $("w-detective").textContent = DETECTIVE;
     $("w-date").textContent = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+    if (Coop.isActive()) startJointWarrant();
     openOverlay("accuse-overlay");
   }
   function hideAccuse() { closeOverlay("accuse-overlay"); }
@@ -1411,7 +1427,150 @@ HARD RULES:
     }
   }
 
+  /* ---------- buddy cop: the joint warrant ----------
+     Both detectives sign one warrant. Signatures are bound to the exact charge
+     they were given for, so changing the killer, weapon or place silently voids
+     every signature already on the page. You cannot be signed onto a charge you
+     never agreed to. */
+  let warrantUnsub = null, warrantPush = null, lastCharge = null;
+
+  function startJointWarrant() {
+    if (warrantUnsub) warrantUnsub();
+    lastCharge = null;
+    $("joint-sig").classList.remove("hidden");
+    warrantUnsub = Coop.watchWarrant(renderJointWarrant);
+  }
+
+  // Debounced so a typed word is a handful of writes, not one per character.
+  function pushWarrantField(id) {
+    clearTimeout(warrantPush);
+    warrantPush = setTimeout(() => {
+      Coop.updateWarrant(id === "pick-weapon"
+        ? { weapon: $("pick-weapon").value }
+        : { location: $("pick-location").value });
+    }, 400);
+  }
+
+  function renderJointWarrant(w) {
+    if (w.sealed && w.verdict) return applySealedWarrant(w);
+
+    // Mirror remote edits, but never yank text out from under someone mid-type.
+    const wpn = $("pick-weapon"), loc = $("pick-location");
+    if (document.activeElement !== wpn && (w.weapon || "") !== wpn.value) wpn.value = w.weapon || "";
+    if (document.activeElement !== loc && (w.location || "") !== loc.value) loc.value = w.location || "";
+
+    if (w.killerId && (!pickedKiller || pickedKiller.id !== w.killerId)) {
+      const s = CASE.suspects.find(x => x.id === w.killerId);
+      if (s) { pickedKiller = s; markLineup(s.id); }
+    } else if (!w.killerId && pickedKiller) {
+      pickedKiller = null; markLineup(null);
+    }
+
+    const valid = Coop.validSignatures(w);
+    const charge = Coop.chargeOf(w);
+    // A signature dropping off because the charge moved is the whole point of
+    // the mechanic, so make it audible rather than silent.
+    if (lastCharge && charge !== lastCharge && Object.keys(w.signatures || {}).length) sfx("paper");
+    lastCharge = charge;
+
+    renderSignatures(w, valid);
+    updateSealState();
+  }
+
+  function markLineup(id) {
+    const box = $("killer-lineup");
+    box.classList.toggle("picked", !!id);
+    [...box.children].forEach(m => {
+      const on = m.dataset.sid === id;
+      m.classList.toggle("accused", on);
+      m.setAttribute("aria-checked", on ? "true" : "false");
+    });
+  }
+
+  function renderSignatures(w, valid) {
+    const box = $("joint-sig-list");
+    box.innerHTML = "";
+    const signed = new Set(valid);
+    const everyone = new Set([DETECTIVE, ...Object.keys(w.signatures || {})]);
+    for (const name of everyone) {
+      const row = el("div", "jsig" + (signed.has(name) ? " on" : ""));
+      row.appendChild(el("span", "jsig-name", "Det. " + name));
+      row.appendChild(el("span", "jsig-state",
+        signed.has(name) ? "signed" : (name === DETECTIVE ? "awaiting your signature" : "not yet signed")));
+      box.appendChild(row);
+    }
+    const iSigned = signed.has(DETECTIVE);
+    const btn = $("seal-btn");
+    btn.innerHTML = iSigned ? "Signed" : "Sign<br>the<br>Warrant";
+    btn.classList.toggle("signed", iSigned);
+    const note = $("joint-note");
+    if (signed.size && signed.size < everyone.size) {
+      note.textContent = iSigned
+        ? "Waiting on your partner. Changing any line below withdraws your signature."
+        : "Your partner has signed. Read it before you do.";
+    } else if (!signed.size) {
+      note.textContent = "A warrant needs both signatures. Either of you may fill it in.";
+    } else {
+      note.textContent = "";
+    }
+  }
+
+  // Sign, or withdraw a signature already given. The second valid signature
+  // triggers the audit and seals.
+  async function signJointWarrant() {
+    const btn = $("seal-btn");
+    if (btn.classList.contains("signed")) { await Coop.unsignWarrant(); return; }
+    if (!pickedKiller || !$("pick-weapon").value.trim() || !$("pick-location").value.trim()) return;
+    btn.disabled = true;
+    try {
+      // flush any pending debounced edit so we sign the charge we can see
+      clearTimeout(warrantPush);
+      await Coop.updateWarrant({
+        killerId: pickedKiller.id, killerName: pickedKiller.name,
+        weapon: $("pick-weapon").value, location: $("pick-location").value
+      });
+      const res = await Coop.signWarrant();
+      if (!res.ok) { btn.disabled = false; return; }
+      sfx("stamp");
+
+      // Everyone present has signed the same charge -> seal it.
+      const roster = new Set([DETECTIVE, ...Object.keys(res.signatures)]);
+      const valid = Object.keys(res.signatures).filter(n => res.signatures[n].on === res.charge);
+      if (valid.length >= 2 && valid.length >= roster.size) {
+        $("joint-note").textContent = "Both signatures on record. Consulting the coroner…";
+        await Coop.sealWarrant(async (w) => {
+          const v = await auditAccusation(w.weapon, w.location);
+          return {
+            killerId: w.killerId, weapon: w.weapon, location: w.location,
+            weaponTyped: w.weapon, locationTyped: w.location,
+            weaponCorrect: v.weapon, locationCorrect: v.location,
+            signedBy: valid, at: new Date().toISOString()
+          };
+        });
+      }
+    } catch (e) {
+      $("joint-note").textContent = "❌ " + e.message;
+    }
+    btn.disabled = false;
+  }
+
+  // Both clients land here through the listener, so the reveal is simultaneous.
+  let sealApplied = false;
+  async function applySealedWarrant(w) {
+    if (sealApplied) return;
+    sealApplied = true;
+    accused = w.verdict;
+    try { await persist(); } catch (e) { /* verdict already lives on the warrant */ }
+    const ab = $("accuse-btn");
+    ab.disabled = true;
+    ab.classList.add("hidden");
+    addResolutionBtn();
+    closeOverlay("accuse-overlay");
+    await showReveal(true);
+  }
+
   async function submitAccusation() {
+    if (Coop.isActive()) return signJointWarrant();
     if (accused) return; // already sealed
     const seal = $("seal-btn");
     const suspect = pickedKiller;

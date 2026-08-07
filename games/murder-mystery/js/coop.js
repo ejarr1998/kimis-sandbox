@@ -168,6 +168,84 @@ const Coop = (() => {
     return u;
   }
 
+  /* ---------- joint warrant ----------
+     One warrant per case, co-signed. A signature records exactly WHAT was
+     signed (`on`); if any field later changes, the recorded text no longer
+     matches the live warrant and the signature is treated as void. That makes
+     "editing voids signatures" fall out of a comparison rather than a
+     race-prone cascade of writes. */
+  const warrantRef = () => caseRef().collection("warrant").doc("joint");
+
+  // Canonical fingerprint of the charge. Signatures are bound to this string.
+  function chargeOf(w) {
+    return [w.killerId || "", (w.weapon || "").trim().toLowerCase(),
+            (w.location || "").trim().toLowerCase()].join("|");
+  }
+  function validSignatures(w) {
+    const charge = chargeOf(w);
+    const sigs = w.signatures || {};
+    return Object.keys(sigs).filter(n => sigs[n] && sigs[n].on === charge);
+  }
+
+  async function updateWarrant(patch) {
+    if (!active) return;
+    await warrantRef().set(
+      Object.assign({}, patch, { updatedAt: serverNow(), updatedBy: ME }),
+      { merge: true });
+  }
+
+  async function signWarrant() {
+    if (!active) return { ok: false };
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(warrantRef());
+      const w = snap.exists ? snap.data() : {};
+      if (w.sealed) return { ok: false, reason: "sealed" };
+      if (!w.killerId || !(w.weapon || "").trim() || !(w.location || "").trim())
+        return { ok: false, reason: "incomplete" };
+      const sigs = Object.assign({}, w.signatures);
+      sigs[ME] = { at: serverNow(), on: chargeOf(w) };
+      tx.set(warrantRef(), { signatures: sigs }, { merge: true });
+      return { ok: true, signatures: sigs, charge: chargeOf(w) };
+    });
+  }
+
+  async function unsignWarrant() {
+    if (!active) return;
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(warrantRef());
+      if (!snap.exists || snap.data().sealed) return;
+      const sigs = Object.assign({}, snap.data().signatures);
+      delete sigs[ME];
+      tx.set(warrantRef(), { signatures: sigs }, { merge: true });
+    });
+  }
+
+  // Seals exactly once, no matter how many clients notice completion at the
+  // same instant: the transaction re-checks `sealed` before writing.
+  async function sealWarrant(buildVerdict) {
+    if (!active) return null;
+    const pre = await warrantRef().get();
+    const w = pre.exists ? pre.data() : {};
+    if (w.sealed) return null;
+    const verdict = await buildVerdict(w);   // the audit call; slow, so outside the tx
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(warrantRef());
+      const cur = snap.data() || {};
+      if (cur.sealed) return null;                       // someone else won
+      if (chargeOf(cur) !== chargeOf(w)) return null;    // charge changed mid-audit
+      tx.set(warrantRef(), { sealed: true, verdict, sealedAt: serverNow() }, { merge: true });
+      return verdict;
+    });
+  }
+
+  function watchWarrant(cb) {
+    const u = warrantRef().onSnapshot(
+      (snap) => cb(snap.exists ? snap.data() : {}),
+      (e) => console.warn("[Coop] warrant listener:", e.message));
+    unsubs.push(u);
+    return u;
+  }
+
   /* ---------- presence ---------- */
   function startPresence() {
     const ping = () => presRef(ME).set({ at: serverNow() }, { merge: true }).catch(() => {});
@@ -207,5 +285,7 @@ const Coop = (() => {
 
   return { init, isActive: () => active, me: () => ME, serverNow,
            claimFloor, releaseFloor, setTyping, setGenerating, heldSuspect: () => heldSuspect,
-           postMessage, watchRoom, addClues, watchClues, watchPresence, teardown };
+           postMessage, watchRoom, addClues, watchClues, watchPresence, teardown,
+           updateWarrant, signWarrant, unsignWarrant, sealWarrant, watchWarrant,
+           validSignatures, chargeOf };
 })();
