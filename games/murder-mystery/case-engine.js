@@ -80,6 +80,7 @@ const CaseEngine = (() => {
     {
       "id": "short lowercase slug, e.g. 'mara'",
       "name": "string", "role": "string — relationship to victim",
+      "intro": "string — ONE punchy noir line (max 20 words) introducing this suspect to the detective: who they are and your first impression, e.g. 'The victim's business partner. Smiles like he's counting your money.' Never hint at guilt or innocence.",
       "physical": "string — detailed appearance for portrait generation",
       "personality": "string — speech style notes for roleplay",
       "alibi": "string — what they claim they were doing",
@@ -104,6 +105,7 @@ Requirements:
 - Distribute clues so at least 3 different suspects hold pieces of the solution.
 - Suspects must NEVER need to reference people outside the 6 suspects and the victim — if a fact needs a source, it belongs in an evidence item, not an invented bystander.
 - Red herrings welcome, but they must be resolvable as innocent.
+- Every suspect needs an "intro" line — pure flavor for the meet-the-suspects sequence; it must NEVER leak or hint at who the killer is.
 - Each suspect MUST have a UNIQUE name — no two suspects may share a first or last name.
 - NAMES: each character has exactly ONE full name, used identically in every field of the document. Double-check every mention before finishing — a name spelled two ways (e.g. "Frost" vs "Voss") is a fatal defect.
 - IMPORTANT: randomize ordering — do NOT put the killer first among suspects, and do NOT put the true weapon/location first in their lists.`;
