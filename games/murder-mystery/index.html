@@ -55,7 +55,8 @@
     color: var(--paper); font-family: inherit; font-size: 1rem;
   }
   input:focus { outline: 1px solid var(--brass); }
-  input::placeholder { color: #6b6152; }
+  input::placeholder { color: #857a66; }
+  :focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
   .code-input { text-transform: uppercase; letter-spacing: 0.5em; text-align: center;
     font-family: "Special Elite", monospace; font-size: 1.4rem; }
   .field-hint { font-size: 0.78rem; color: var(--mute); font-style: italic; margin: 0.35rem 0 0; }
@@ -104,7 +105,7 @@
   <div class="panel">
     <div class="panel-title">Take an existing case</div>
     <input id="code" class="code-input" maxlength="4" placeholder="CODE">
-    <input id="name" placeholder="Your detective name" style="margin-top:0.6rem">
+    <input id="name" maxlength="24" placeholder="Your detective name" style="margin-top:0.6rem">
     <button class="stamp-btn" onclick="joinExisting()">🔍 Begin Investigation</button>
   </div>
 
@@ -116,7 +117,34 @@
 <script src="../../shared/api.js"></script>
 <script src="case-engine.js"></script>
 <script>
-  const status = (t) => document.getElementById("status").innerHTML = t;
+  const statusEl = document.getElementById("status");
+
+  // Plain-text status: dynamic/error text is always inserted via textContent.
+  const status = (t) => { statusEl.textContent = t; };
+
+  // Styled success markup, built from nodes so `code` stays safely escaped.
+  function statusCaseReady(code) {
+    statusEl.textContent = "";
+    statusEl.append("✅ Case ready! Join code: ");
+    const b = document.createElement("b");
+    b.style.fontSize = "1.4rem";
+    b.style.letterSpacing = "0.35em";
+    b.textContent = code;
+    statusEl.append(b, document.createElement("br"),
+      "Share it with a friend, then take the case below.");
+  }
+
+  // Shared detective-name validation rules (mirrored in archive.html).
+  function validateDetectiveName(raw) {
+    const name = (raw || "").trim();
+    if (!name) return { ok: false, error: "Enter your detective name." };
+    if (name.length > 24) return { ok: false, error: "Detective name must be 24 characters or fewer." };
+    if (name.includes("/") || name.includes("."))
+      return { ok: false, error: "Detective name can't contain / or . characters." };
+    if (!/^[\p{L}\p{N} \-_']+$/u.test(name))
+      return { ok: false, error: "Detective name may only use letters, numbers, spaces, and - _ ' characters." };
+    return { ok: true, name };
+  }
 
   async function hostCase() {
     const btn = document.getElementById("host");
@@ -129,12 +157,11 @@
       await CaseEngine.generatePortraits(caseFile, status);
       status("🔒 Locking the case file…");
       const code = await CaseEngine.saveCase(caseFile);
-      status(`✅ Case ready! Join code: <b style="font-size:1.4rem;letter-spacing:0.35em">${code}</b><br>
-              Share it with a friend, then take the case below.`);
+      statusCaseReady(code);
       document.getElementById("code").value = code;
       document.getElementById("name").focus();
     } catch (e) {
-      status("❌ " + e.message + "<br>(Check keys on the Settings page and try again.)");
+      status("❌ " + e.message + " (Check keys on the Settings page and try again.)");
     } finally {
       btn.disabled = false;
     }
@@ -142,10 +169,10 @@
 
   function joinExisting() {
     const code = document.getElementById("code").value.trim().toUpperCase();
-    const name = document.getElementById("name").value.trim();
+    const check = validateDetectiveName(document.getElementById("name").value);
     if (code.length !== 4) { status("⚠️ Enter the 4-letter case code."); return; }
-    if (!name) { status("⚠️ Enter your detective name."); return; }
-    location.href = `game.html?case=${encodeURIComponent(code)}&detective=${encodeURIComponent(name)}`;
+    if (!check.ok) { status("⚠️ " + check.error); return; }
+    location.href = `game.html?case=${encodeURIComponent(code)}&detective=${encodeURIComponent(check.name)}`;
   }
 </script>
 </body>
