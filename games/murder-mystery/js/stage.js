@@ -19,6 +19,7 @@ const Stage = (() => {
     file: "Case File",
     suspects: "Lineup Room",
     board: "War Room Board",
+    ranking: "Board of Suspicion",
     evidence: "Evidence Locker",
     chat: "Interrogation"
   };
@@ -158,16 +159,16 @@ const Stage = (() => {
     s.innerHTML = "";
     const bar = el("div", "stage-bar");
     const nav = el("div", "stage-nav");
-    for (const v of ["file", "suspects", "board", "evidence"]) {
+    for (const v of ["file", "suspects", "board", "ranking", "evidence"]) {
       const b = el("button", "stage-nav-btn", VIEW_NAMES[v]);
       b.dataset.view = v;
       b.onclick = () => switchPrimary(v);
       nav.appendChild(b);
     }
-    const close = el("button", "stage-close", "✕ back to the desk");
-    close.onclick = () => close();
+    const closeBtn = el("button", "stage-close", "✕ back to the desk");
+    closeBtn.onclick = () => close();   // NB: must not shadow close() above
     bar.appendChild(nav);
-    bar.appendChild(close);
+    bar.appendChild(closeBtn);
     const panesWrap = el("div", "stage-panes");
     s.appendChild(bar);
     s.appendChild(panesWrap);
@@ -253,6 +254,14 @@ const Stage = (() => {
   }
 
   function open(view) {
+    // initZoneFocus() derives the view name from each zone's data-tab, so a new
+    // desk panel silently gets an ⤢ button pointing at a view that may not be
+    // registered here. Bail before mutating any state: half-opening the Stage
+    // and then throwing inside addPane leaves it stuck with an empty shell.
+    if (!VIEWS[view]) {
+      console.warn(`[Stage] no fullscreen view registered for "${view}" — add it to VIEWS and VIEW_NAMES.`);
+      return;
+    }
     if (!opened) {
       buildShell();
       stageEl().classList.remove("hidden");
@@ -445,11 +454,43 @@ const Stage = (() => {
     b.appendChild(grid);
   }
 
+  // ---------- VIEW: board of suspicion ----------
+  // Adopts the live #ranking node rather than rebuilding it, so the sliders,
+  // band chips and persist() wiring all keep working untouched. Fullscreen
+  // buys width, so the rows lay out as a responsive grid instead of one
+  // tall column.
+  function viewRanking(pane) {
+    const b = pane.body;
+    b.classList.add("suspicion-room");
+
+    const bar = el("div", "war-tools");
+    const hint = el("span", "war-label", "drag a slider or tap a band — nobody else sees this");
+    bar.appendChild(hint);
+    const cols = el("span", "war-sizes");
+    cols.appendChild(el("span", "war-label", "columns"));
+    for (const k of ["1", "2", "3"]) {
+      const cb = el("button", "war-size" + (k === "2" ? " on" : ""), k);
+      cb.onclick = () => {
+        b.style.setProperty("--rank-cols", k);
+        b.querySelectorAll(".war-size").forEach(x => x.classList.toggle("on", x === cb));
+      };
+      cols.appendChild(cb);
+    }
+    bar.appendChild(cols);
+    b.appendChild(bar);
+
+    const box = $("ranking");
+    if (!box) { b.appendChild(el("p", "locker-empty", "No suspects on the board yet.")); return; }
+    pane.restore = adopt(box, b);
+    renderRanking();
+  }
+
   const VIEWS = {
     file: viewFile,
     suspects: viewSuspects,
     chat: viewChat,
     board: viewBoard,
+    ranking: viewRanking,
     evidence: viewEvidence
   };
 

@@ -284,3 +284,31 @@ body.split-dragging-v, body.split-dragging-v * { cursor: row-resize !important; 
 
 /* overlays must stay above the stage */
 .overlay { z-index: 120; }
+
+/* ---------- Board of Suspicion (fullscreen) ----------
+   #ranking is ADOPTED from the desk, so these rules must scope to the pane
+   and never leak back to the desk copy when it's restored. */
+.pane-body.suspicion-room { --rank-cols: 2; overflow-y: auto; }
+
+.suspicion-room #ranking {
+  display: grid;
+  grid-template-columns: repeat(var(--rank-cols), minmax(0, 1fr));
+  gap: 0.9rem;
+  align-items: start;
+  padding: 0.2rem 0.1rem 1rem;
+}
+/* the desk stacks rows with margin; in a grid that doubles the gap */
+.suspicion-room #ranking .rank-row { margin-bottom: 0; }
+
+/* fullscreen has the room to let the alibi breathe instead of clamping it */
+.suspicion-room .rank-alibi {
+  -webkit-line-clamp: unset; display: block; max-height: none;
+}
+.suspicion-room .rank-meter { font-size: 2.1rem; }
+.suspicion-room .rank-chips { flex-wrap: wrap; }
+
+/* one column below tablet regardless of the picker */
+@media (max-width: 900px) {
+  .pane-body.suspicion-room { --rank-cols: 1 !important; }
+  .suspicion-room .war-sizes { display: none; }
+}
