@@ -1,1 +1,214 @@
-<PLACEHOLDER_GAME_HTML>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dead Air — Case File</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+
+  <div class="topbar">
+    <div>
+      <div class="brand">Dead Air · Homicide Division</div>
+      <h1 id="title">Case File</h1>
+    </div>
+    <div class="meta">
+      <div class="who" id="subtitle"></div>
+      <button class="icon-btn" id="fs-btn" onclick="toggleAppFullscreen()" aria-label="toggle fullscreen">⛶</button>
+      <button class="icon-btn" id="sound-btn" onclick="toggleSound()" aria-label="toggle sound">🔊</button>
+      <button class="icon-btn close-file" onclick="location.href='index.html'" aria-label="close file">✕</button>
+    </div>
+  </div>
+
+  <div id="status">Opening case file… <a href="index.html">&larr; back to the lobby</a></div>
+
+  <div id="game" class="desk hidden">
+
+    <!-- 1 · case folder -->
+    <div class="zone zone-folder active" data-tab="file">
+      <div class="panel paper-doc dossier" id="opening-panel">
+        <div class="stamp">Case File</div>
+        <div class="panel-title">Initial Report</div>
+        <p id="opening"></p>
+        <div class="folder-tools">
+          <button class="ghost" onclick="narrate(this, CASE.openingScene, 'opening')">🔊 hear the report read aloud</button>
+          <span class="narr-status" style="color:#d97a72;font-size:0.8rem"></span>
+        </div>
+        <div class="folder-tools">
+          <button class="ghost" id="intro-btn" onclick="playIntro(true)">👥 persons of interest</button>
+          <button class="stamp-btn" id="accuse-btn" onclick="showAccuse()">⚖ Make Accusation</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2 · suspect wall -->
+    <div class="zone zone-suspects" data-tab="suspects">
+      <div class="panel" id="dashboard">
+        <div class="panel-title">Suspect Wall <span class="right">tap a photo to interrogate</span></div>
+        <div class="suspects" id="suspects"></div>
+      </div>
+    </div>
+
+    <!-- 3 · corkboard -->
+    <div class="zone zone-board" data-tab="board">
+      <div class="panel cork">
+        <div class="panel-title">The Corkboard <span class="right">drag the notes · red string links a source</span></div>
+        <div id="boardfield">
+          <svg id="strings" aria-hidden="true"></svg>
+          <div class="cork-empty" id="cork-empty">Nothing pinned yet. Go ask some questions.</div>
+          <div id="summary-card" class="hidden"></div>
+        </div>
+        <div class="cork-tools">
+          <button class="ghost" id="organize-btn" onclick="organizeNotes()">🧠 type up my notes (AI summary)</button>
+          <button class="ghost" id="arrange-btn" onclick="autoArrange()">🧹 auto-arrange</button>
+          <span id="organize-status"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4 · evidence envelope -->
+    <div class="zone zone-evidence" data-tab="evidence">
+      <div class="panel" id="evidence-panel">
+        <div class="panel-title">Evidence Envelope <span class="right">tap the envelope · tap a tag to hold it to the lamp</span></div>
+        <button class="envelope" id="envelope" onclick="toggleEnvelope()">
+          <span class="badge" id="env-badge">0/0</span>
+          <span class="env-label">Evidence — Examinations</span>
+        </button>
+        <div class="evidence-list hidden" id="evidence"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- mobile tab bar -->
+  <div id="tabbar" role="tablist">
+    <button data-tab="file" class="on" onclick="showTab('file')">📁 File</button>
+    <button data-tab="suspects" onclick="showTab('suspects')">🕵 Suspects</button>
+    <button data-tab="board" onclick="showTab('board')">📌 Board</button>
+    <button data-tab="evidence" onclick="showTab('evidence')">🏷 Evidence</button>
+  </div>
+
+  <!-- meet the suspects overlay -->
+  <div class="overlay hidden" id="intro-overlay">
+    <div class="room">
+      <div class="intro-card" id="intro-card"></div>
+      <div class="intro-nav">
+        <button class="ghost intro-skip" onclick="endIntro()">skip introductions</button>
+        <div class="intro-dots" id="intro-dots"></div>
+        <button class="stamp-btn" id="intro-next" onclick="introNext()">next →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- interrogation room overlay -->
+  <div class="overlay hidden" id="chat-overlay">
+    <div class="room panel">
+      <div class="panel-title">Interrogation Room</div>
+      <div class="chat-head">
+        <div id="chat-portrait"></div>
+        <div>
+          <div class="who" id="chat-who"></div>
+          <div class="role" id="chat-role"></div>
+        </div>
+        <button class="ghost end" onclick="closeChat()">end interview ✕</button>
+      </div>
+      <div id="chat-notes" class="hidden">
+        <button class="ghost" id="chat-notes-toggle" onclick="toggleChatNotes()">📋 my notes ▸</button>
+        <div id="chat-notes-body" class="hidden"></div>
+      </div>
+      <div id="chatlog"></div>
+      <div id="typing"></div>
+      <div id="chatbar">
+        <input id="question" placeholder="Ask a precise question…" onkeydown="if(event.key==='Enter')ask()">
+        <button class="stamp-btn" id="ask-btn" onclick="ask()">Ask</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- warrant overlay -->
+  <div class="overlay wide hidden" id="accuse-overlay">
+    <div class="room">
+      <div class="panel paper-doc warrant" id="accuse-panel">
+        <div class="warrant-head">
+          <div class="warrant-star">✪</div>
+          <div>
+            <div class="warrant-office">Homicide Division · City Precinct</div>
+            <div class="warrant-title">Warrant of Arrest</div>
+          </div>
+          <div class="warrant-no">Warrant № <span id="w-code"></span><br>Filed <span id="w-date"></span></div>
+        </div>
+        <div class="warrant-inner">
+          <p class="warrant-body">
+            <span class="matter" style="margin:0">In the matter of</span><br>
+            the homicide of <b id="w-victim"></b>, investigated under Case № <b id="w-code2"></b>,
+            the undersigned detective, having examined the evidence and testimony on record,
+            does hereby swear upon this warrant that:
+          </p>
+          <div class="charge charge-killer">
+            <span class="lab" id="lineup-label">the murder was committed by — point them out of the lineup:</span>
+            <div class="lineup" id="killer-lineup" role="radiogroup" aria-labelledby="lineup-label"></div>
+          </div>
+          <div class="charge">
+            <label class="lab" for="pick-weapon">with the instrument</label>
+            <select id="pick-weapon"></select>
+          </div>
+          <div class="charge">
+            <label class="lab" for="pick-location">at the place known as</label>
+            <select id="pick-location"></select>
+          </div>
+          <div class="warrant-warning">⚠ A signed warrant is final. It cannot be amended, withdrawn, or taken back.</div>
+          <div class="warrant-sign">
+            <div class="sig-block">
+              <div class="sig-name">Det. <span id="w-detective"></span></div>
+              <div class="sig-line">Signature of investigating detective</div>
+            </div>
+            <button class="seal-btn" id="seal-btn" onclick="submitAccusation()" disabled>Press<br>the<br>Seal</button>
+          </div>
+          <div><button class="ghost" onclick="hideAccuse()">not yet — keep investigating</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- evidence examine overlay -->
+  <div class="overlay hidden" id="evidence-overlay">
+    <div class="room">
+      <div class="lamp-tag" id="lamp-tag">
+        <div class="en" id="ev-name"></div>
+        <div class="ed" id="ev-desc"></div>
+        <div class="pinned-note" id="ev-pinned"></div>
+        <button class="stamp-btn" onclick="closeEvidence()">tuck it away</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- reveal overlay -->
+  <div class="overlay wide hidden" id="reveal-overlay">
+    <div class="room panel" id="reveal-panel">
+      <button class="overlay-x" onclick="closeReveal()" aria-label="Close case resolution">✕</button>
+      <div class="panel-title">Case Resolution</div>
+      <div id="stamp-slot"></div>
+      <div class="scoreline" id="verdict"></div>
+      <p id="recap"></p>
+      <button class="ghost" onclick="narrate(this, CASE.solution.recap, 'recap')">🔊 hear how it happened</button> <span class="narr-status" style="color:#d97a72;font-size:0.8rem"></span>
+      <div class="cmp" id="comparison"></div>
+      <div class="cmp" id="peer-comparison"></div>
+      <div class="reveal-exit">
+        <button class="reveal-return" onclick="closeReveal()">← Return to the Desk</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- fullscreen stage: purpose-built views + split screen (built by js/stage.js) -->
+  <div id="stage" class="hidden" aria-hidden="true"></div>
+
+<script src="../../shared/api.js"></script>
+<script src="case-engine.js"></script>
+<script src="js/game.js"></script>
+<script src="js/stage.js"></script>
+</body>
+</html>
