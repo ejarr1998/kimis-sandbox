@@ -54,8 +54,10 @@
   <div class="result" id="r-grokimage"></div>
 
   <h3>ElevenLabs (TTS)</h3>
-  <button onclick="testEleven(this)">Test ElevenLabs</button>
+  <button onclick="testEleven(this)">Test ElevenLabs (narration)</button>
   <div class="result" id="r-eleven"></div>
+  <button onclick="testElevenSFX(this)">Test ElevenLabs (sound effects)</button>
+  <div class="result" id="r-elevensfx"></div>
 
   <h3>Firebase / Firestore</h3>
   <button onclick="testFirebase(this)">Test Firestore</button>
@@ -161,6 +163,20 @@
     el.className = "result ok";
     el.innerHTML = "✅ Audio generated:<br><audio controls autoplay src='" + url + "'></audio>";
   });
+  // Narration and sound effects are billed and gated SEPARATELY, so a working
+  // TTS test says nothing about SFX. This one uses <audio controls> with no
+  // autoplay: if generation succeeds you get a player you can tap. That
+  // separates "the API failed" from "the browser blocked playback", which is
+  // invisible in the game itself because both produce silence.
+  const testElevenSFX = (b) => run(b, "r-elevensfx", "elevenlabs", async () => {
+    const url = await SandboxAPI.elevenSFX("rain on a window at night", { durationSeconds: 3 });
+    const el = document.getElementById("r-elevensfx");
+    el.className = "result ok";
+    el.innerHTML = "✅ Sound effect generated. Tap play — if you hear rain, the API works " +
+      "and any silence in the game is a playback/autoplay problem, not a key problem.<br>" +
+      "<audio controls src='" + url + "'></audio>";
+  });
+
   const testFirebase = (b) => run(b, "r-firebase", null, async () => {
     await SandboxAPI.firebaseApp();
     const db = firebase.firestore();
