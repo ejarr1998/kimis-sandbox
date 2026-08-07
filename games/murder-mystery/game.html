@@ -168,6 +168,7 @@
     color: #241d12; min-height: 4rem;
   }
   .folder-tools { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; align-items: center; margin-top: 0.6rem; }
+  #next-cue { font-style: italic; }
 
   /* ---------- suspect wall ---------- */
   .suspects { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; }
@@ -283,13 +284,16 @@
     min-height: 480px;
     border-radius: 3px;
     overflow: hidden;
-    touch-action: none;
+    touch-action: pan-y;
   }
   #strings { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
   .cork-empty { color: #c9b788; font-style: italic; font-size: 0.9rem; padding: 1rem; position: relative; z-index: 2; }
   .clue-note {
     position: absolute; z-index: 2;
     width: 168px;
+    max-height: 7.5em;
+    overflow: hidden;
+    touch-action: none;
     background: linear-gradient(170deg, #efe6d0, #ddd0b2);
     color: #2c2519;
     font-size: 0.8rem; line-height: 1.45;
@@ -300,6 +304,12 @@
     user-select: none; -webkit-user-select: none;
     transform-style: preserve-3d;
     will-change: transform;
+  }
+  .clue-note .txt {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 5;
+    overflow: hidden;
   }
   .clue-note.dragging { cursor: grabbing; z-index: 5; box-shadow: 0 10px 22px rgba(0,0,0,0.55); }
   .clue-note::before {
@@ -360,6 +370,14 @@
   .chat-head .who { font-family: "Special Elite", monospace; font-size: 1rem; }
   .chat-head .role { font-size: 0.8rem; color: var(--mute); font-style: italic; }
   .chat-head .end { margin-left: auto; }
+  #chat-notes { margin-bottom: 0.6rem; }
+  #chat-notes-body {
+    font-size: 0.85rem; line-height: 1.55; white-space: pre-wrap;
+    color: var(--mute);
+    max-height: 30vh; overflow-y: auto;
+    border-top: 1px dashed var(--line);
+    padding: 0.4rem 0 0.2rem; margin-top: 0.2rem;
+  }
   #chatlog { max-height: 46vh; overflow-y: auto; padding-right: 0.3rem; margin-bottom: 0.7rem; }
   .bubble { border-radius: 4px; padding: 0.6rem 0.9rem; margin: 0.5rem 0;
     font-size: 0.95rem; line-height: 1.6; max-width: 88%; white-space: pre-wrap; }
@@ -604,12 +622,19 @@
     padding: 0.35rem 0.3rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
   }
   #tabbar button {
+    position: relative;
     flex: 1; background: none; color: var(--mute);
     font-family: "Special Elite", monospace; font-size: 0.62rem;
     letter-spacing: 0.12em; text-transform: uppercase;
     padding: 0.45rem 0.1rem; border-radius: 3px;
   }
   #tabbar button.on { color: var(--brass); background: rgba(201,168,106,0.1); }
+  #tabbar button.has-new::after {
+    content: ""; position: absolute; top: 3px; right: 10px;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--red);
+    box-shadow: 0 0 4px rgba(138,47,43,0.9);
+  }
   @media (max-width: 759px) {
     #tabbar { display: flex; }
     .topbar h1 { font-size: 0.9rem; }
@@ -740,6 +765,10 @@
         </div>
         <button class="ghost end" onclick="closeChat()">end interview ✕</button>
       </div>
+      <div id="chat-notes" class="hidden">
+        <button class="ghost" id="chat-notes-toggle" onclick="toggleChatNotes()">📋 my notes ▸</button>
+        <div id="chat-notes-body" class="hidden"></div>
+      </div>
       <div id="chatlog"></div>
       <div id="typing"></div>
       <div id="chatbar">
@@ -862,15 +891,24 @@
   }
 
   // ---------- typewriter ----------
-  // Types `text` into `node` at ~25ms/char. Clicking/tapping `skipTarget` completes
-  // instantly. prefers-reduced-motion: instant. Returns a Promise.
+  // Types `text` into `node` at ~25ms/char for the first 80 chars, then ~10ms/char.
+  // Clicking/tapping `skipTarget` completes instantly. prefers-reduced-motion: instant.
+  // Plays the "keys" sound loop while typing when sound is on. Returns a Promise.
   function typeInto(node, text, skipTarget) {
     node.textContent = "";
     if (reducedMotion()) { node.textContent = text; return Promise.resolve(); }
     return new Promise((resolve) => {
       let i = 0, done = false;
+      const keys = sfxCache.keys;
+      if (soundOn && keys) {
+        try { keys.currentTime = 0; keys.play().catch(() => {}); } catch (e) { /* ignore */ }
+      }
+      const stopKeys = () => {
+        if (keys) { try { keys.pause(); keys.currentTime = 0; } catch (e) { /* ignore */ } }
+      };
       const finish = () => {
         if (done) return; done = true;
+        stopKeys();
         node.textContent = text;
         if (skipTarget) skipTarget.removeEventListener("pointerdown", finish);
         resolve();
@@ -881,7 +919,7 @@
         i += 1;
         node.textContent = text.slice(0, i);
         if (i >= text.length) finish();
-        else setTimeout(tick, 25);
+        else setTimeout(tick, i <= 80 ? 25 : 10);
       };
       tick();
     });
@@ -892,8 +930,9 @@
     rain:  { desc: "rain on a window at night, gentle, loopable", dur: 20, vol: 0.35, loop: true },
     paper: { desc: "paper rustle, single page turned", dur: 2, vol: 0.5 },
     stamp: { desc: "rubber stamp thunk on wood desk", dur: 1.5, vol: 0.5 },
-    door:  { desc: "heavy door closing in a quiet room", dur: 2, vol: 0.5 },
+    door:  { desc: "heavy door closing in a quiet room", dur: 2, vol: 0.35 },
     pin:   { desc: "pin pushed into corkboard", dur: 1, vol: 0.5 },
+    keys:  { desc: "soft typewriter keys, slow irregular typing, loopable", dur: 6, vol: 0.15, loop: true },
   };
   const sfxCache = {};   // name -> Audio
   let soundOn = localStorage.getItem("deadair_sound") !== "off"; // default ON
@@ -901,7 +940,7 @@
   async function armSound() {
     if (sfxArmed || !soundOn) return;
     sfxArmed = true;
-    for (const [name, def] of Object.entries(SFX_DEFS)) {
+    await Promise.all(Object.entries(SFX_DEFS).map(async ([name, def]) => {
       try {
         const url = await SandboxAPI.elevenSFX(def.desc, { durationSeconds: def.dur });
         const a = new Audio(url);
@@ -909,13 +948,14 @@
         a.loop = !!def.loop;
         sfxCache[name] = a;
       } catch (e) { /* silent — sound is garnish */ }
-    }
+    }));
     if (soundOn && sfxCache.rain) sfxCache.rain.play().catch(() => {});
   }
-  function sfx(name) {
+  function sfx(name, vol) {
     const a = sfxCache[name];
     if (!soundOn || !a) return;
     try {
+      a.volume = vol != null ? vol : (SFX_DEFS[name] ? SFX_DEFS[name].vol : 0.5);
       if (!a.loop) { a.currentTime = 0; }
       a.play().catch(() => {});
     } catch (e) { /* ignore */ }
@@ -972,7 +1012,33 @@
       z.classList.toggle("active", z.dataset.tab === name);
     for (const b of document.querySelectorAll("#tabbar button"))
       b.classList.toggle("on", b.dataset.tab === name);
-    if (name === "board") requestAnimationFrame(drawStrings);
+    if (name === "board") {
+      const bb = document.querySelector('#tabbar button[data-tab="board"]');
+      if (bb) bb.classList.remove("has-new");
+      requestAnimationFrame(drawStrings);
+    }
+  }
+
+  // ---------- dossier boot sequencing ----------
+  let dossierStarted = false;
+  function startDossier() {
+    if (dossierStarted) return;
+    dossierStarted = true;
+    // dossier types itself out; tap the folder to skip
+    typeInto($("opening"), CASE.openingScene, $("opening-panel")).then(showNextCue);
+  }
+  // one-line orientation cue once the report has typed itself out
+  function showNextCue() {
+    if (document.getElementById("next-cue")) return;
+    const b = el("button", "ghost", "Next: tap 🕵 Suspects and start asking questions.");
+    b.id = "next-cue";
+    b.onclick = () => {
+      showTab("suspects");
+      const z = document.querySelector(".zone-suspects");
+      if (z && z.scrollIntoView)
+        z.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+    };
+    document.querySelector("#opening-panel .folder-tools").appendChild(b);
   }
 
   async function boot() {
@@ -988,20 +1054,23 @@
       const me = (await playerRef.get()).data();
       myClues = me.clues || []; chats = me.chats || {}; examined = me.examined || [];
       accused = me.accusation; notesSummary = me.notesSummary || "";
+      lastClueCount = myClues.length;
       renderAll();
       $("status").classList.add("hidden");
       $("game").classList.remove("hidden");
       if (!CASE.evidence.length) $("evidence-panel").classList.add("hidden");
       if (notesSummary) { $("summary-card").textContent = notesSummary; $("summary-card").classList.remove("hidden"); }
-      // dossier types itself out; tap the folder to skip
-      typeInto($("opening"), CASE.openingScene, $("opening-panel"));
       if (accused) {
         const ab = $("accuse-btn");
         ab.disabled = true;
         ab.classList.add("hidden");
         showReveal(false);
-      } else if (!localStorage.getItem(introKey())) {
+        startDossier();
+      } else if (CASE.suspects.length && !localStorage.getItem(introKey())) {
+        // intro first; the dossier starts typing in endIntro()
         playIntro(false);
+      } else {
+        startDossier();
       }
     } catch (e) {
       $("status").textContent = "❌ " + e.message;
@@ -1079,6 +1148,7 @@
   function endIntro() {
     localStorage.setItem(introKey(), "seen");
     closeOverlay("intro-overlay");
+    startDossier();
   }
 
   // ---------- evidence ----------
@@ -1139,6 +1209,7 @@
 
   // ---------- corkboard ----------
   const boardKey = () => `deadair_board_${CODE}_${DETECTIVE}`;
+  let lastClueCount = 0;
   function loadBoardPos() {
     try { return JSON.parse(localStorage.getItem(boardKey()) || "{}"); }
     catch (e) { return {}; }
@@ -1169,7 +1240,8 @@
       note.style.left = pos[i].x + "%";
       note.style.top = pos[i].y + "%";
       note.style.transform = `rotate(${(i % 2 ? 1 : -1) * (0.6 + (i % 3) * 0.4)}deg)`;
-      note.appendChild(el("span", null, clueText(c)));
+      note.title = clueText(c); // full text on hover/long-press (plain attribute, never HTML)
+      note.appendChild(el("span", "txt", clueText(c)));
       note.appendChild(el("span", "src", clueFrom(c)));
       note.tabIndex = 0;
       makeDraggable(note);
@@ -1177,6 +1249,14 @@
       field.appendChild(note);
     });
     if (changed) saveBoardPos(pos);
+    // badge the Board tab when new clues arrive while it's not active
+    if (myClues.length > lastClueCount) {
+      const boardZone = document.querySelector("#game .zone-board");
+      const boardBtn = document.querySelector('#tabbar button[data-tab="board"]');
+      if (boardBtn && boardZone && !boardZone.classList.contains("active"))
+        boardBtn.classList.add("has-new");
+    }
+    lastClueCount = myClues.length;
     requestAnimationFrame(drawStrings);
   }
 
@@ -1209,7 +1289,7 @@
           y: parseFloat(note.style.top)
         };
         saveBoardPos(pos);
-        sfx("pin");
+        sfx("pin", 0.3); // soft tap on drag-release; actual clue pinning stays at 0.5
       };
       note.addEventListener("pointermove", move);
       note.addEventListener("pointerup", up);
@@ -1341,12 +1421,27 @@ Max 250 words total. Be specific with names, never say "the suspect".`,
     $("chat-role").textContent = s.role;
     $("chat-portrait").innerHTML = "";
     $("chat-portrait").appendChild(makePortrait(s.name, s.portrait));
+    // collapsible "my notes" strip — reference the AI summary while questioning
+    const cn = $("chat-notes");
+    if (notesSummary) {
+      cn.classList.remove("hidden");
+      $("chat-notes-body").textContent = notesSummary;
+      $("chat-notes-body").classList.add("hidden");
+      $("chat-notes-toggle").textContent = "📋 my notes ▸";
+    } else {
+      cn.classList.add("hidden");
+    }
     renderChat(false);
     openOverlay("chat-overlay");
     sfx("door");
     setTimeout(() => $("question").focus(), 80);
   }
   function closeChat() { closeOverlay("chat-overlay"); currentSuspect = null; }
+  function toggleChatNotes() {
+    const body = $("chat-notes-body");
+    const collapsed = body.classList.toggle("hidden");
+    $("chat-notes-toggle").textContent = collapsed ? "📋 my notes ▸" : "📋 my notes ▾";
+  }
 
   function renderChat(typeLast) {
     const log = chats[currentSuspect.id] || [];
@@ -1357,7 +1452,10 @@ Max 250 words total. Be specific with names, never say "the suspect".`,
     // the newest reply types itself out
     if (typeLast && log.length && log[log.length - 1].role === "assistant") {
       const last = $("chatlog").lastChild;
+      const replyLen = log[log.length - 1].text.length;
+      $("typing").textContent = "typing… (tap to finish)";
       typeInto(last, log[log.length - 1].text, $("chatlog")).then(() => {
+        $("typing").textContent = "";
         $("chatlog").scrollTop = $("chatlog").scrollHeight;
       });
       const scroller = setInterval(() => {
@@ -1365,7 +1463,7 @@ Max 250 words total. Be specific with names, never say "the suspect".`,
           $("chatlog").scrollTop = $("chatlog").scrollHeight;
         else clearInterval(scroller);
       }, 120);
-      setTimeout(() => clearInterval(scroller), log[log.length - 1].text.length * 25 + 500);
+      setTimeout(() => clearInterval(scroller), Math.min(replyLen, 80) * 25 + Math.max(0, replyLen - 80) * 10 + 500);
     }
   }
 
@@ -1461,9 +1559,15 @@ HARD RULES:
     btn.disabled = true; btn.textContent = "Generating voice…";
     try {
       const url = await SandboxAPI.elevenTTS(text);
+      // release the per-call blob URL once playback ends or errors
+      const release = () => { if (url.startsWith("blob:")) URL.revokeObjectURL(url); };
       try {
-        await new Audio(url).play();
+        const audio = new Audio(url);
+        audio.addEventListener("ended", release, { once: true });
+        audio.addEventListener("error", release, { once: true });
+        await audio.play();
       } catch (playErr) {
+        release();
         if (status) status.textContent = "audio blocked — tap again to play";
       }
       btn.textContent = "🔊 Play again";
@@ -1575,7 +1679,7 @@ HARD RULES:
     const stamp = score === 3 ? ["Case Closed", "win"] : k ? ["Killer Caught", "partial"] : ["Case Unsolved", "loss"];
     $("stamp-slot").innerHTML = "";
     $("stamp-slot").appendChild(el("div", "verdict-stamp " + stamp[1], stamp[0]));
-    sfx("stamp");
+    sfx("stamp", 0.6); // heavier hit for the verdict stamp
     const verdictEl = $("verdict");
     verdictEl.textContent = "";
     verdictEl.appendChild(document.createTextNode(
