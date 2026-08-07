@@ -1,7 +1,9 @@
   const params = new URLSearchParams(location.search);
   const CODE = params.get("case"), DETECTIVE = params.get("detective");
   let CASE = null, playerRef = null, myClues = [], chats = {}, examined = [],
-      accused = null, currentSuspect = null, notesSummary = "", pickedKiller = null;
+      accused = null, currentSuspect = null, notesSummary = "", pickedKiller = null,
+      hiddenClues = [], // archived notes: [{text, from}] — display-only, clues stay in myClues
+      rankings = {}; // Board of Suspicion: {suspectId: 0-100}, private per detective
 
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/[&<>"']/g, ch =>
@@ -179,6 +181,7 @@
     if (e.key !== "Escape") return;
     if (typeof Stage !== "undefined" && Stage.isOpen()) return; // stage handles its own Escape
     if (!$("reveal-overlay").classList.contains("hidden")) closeReveal();
+    if (!$("archive-drawer").classList.contains("hidden")) toggleArchiveDrawer(false);
   });
 
   // ---------- mobile tabs ----------
@@ -202,17 +205,25 @@
     // dossier types itself out; tap the folder to skip
     typeInto($("opening"), CASE.openingScene, $("opening-panel")).then(showNextCue);
   }
-  // one-line orientation cue once the report has typed itself out
+  // one-line orientation cue once the report has typed itself out.
+  // New players get the introductions first ("meet the persons of interest");
+  // after those complete (endIntro), the suspects-tab cue appears.
   function showNextCue() {
     if (document.getElementById("next-cue")) return;
-    const b = el("button", "ghost", "Next: tap 🕵 Suspects and start asking questions.");
+    const b = el("button", "ghost");
     b.id = "next-cue";
-    b.onclick = () => {
-      showTab("suspects");
-      const z = document.querySelector(".zone-suspects");
-      if (z && z.scrollIntoView)
-        z.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
-    };
+    if (introPending) {
+      b.textContent = "Next: 👥 meet the persons of interest.";
+      b.onclick = () => { b.remove(); playIntro(false); };
+    } else {
+      b.textContent = "Next: tap 🕵 Suspects and start asking questions.";
+      b.onclick = () => {
+        showTab("suspects");
+        const z = document.querySelector(".zone-suspects");
+        if (z && z.scrollIntoView)
+          z.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+      };
+    }
     document.querySelector("#opening-panel .folder-tools").appendChild(b);
   }
 
@@ -228,6 +239,8 @@
       playerRef = await CaseEngine.joinCase(CODE, DETECTIVE);
       const me = (await playerRef.get()).data();
       myClues = me.clues || []; chats = me.chats || {}; examined = me.examined || [];
+      hiddenClues = me.hiddenClues || [];
+      rankings = me.rankings || {};
       accused = me.accusation; notesSummary = me.notesSummary || "";
       lastClueCount = myClues.length;
       renderAll();
@@ -242,10 +255,10 @@
         addResolutionBtn();
         showReveal(false);
         startDossier();
-      } else if (CASE.suspects.length && !localStorage.getItem(introKey())) {
-        // intro first; the dossier starts typing in endIntro()
-        playIntro(false);
       } else {
+        // the murder report types out FIRST; for a brand-new player the
+        // meet-the-suspects sequence follows as the next-step cue
+        introPending = !!(CASE.suspects.length && !localStorage.getItem(introKey()));
         startDossier();
       }
     } catch (e) {
@@ -258,7 +271,7 @@
     $("subtitle").textContent = "";
     $("subtitle").appendChild(el("div", null, "Case № " + CODE));
     $("subtitle").appendChild(el("div", null, "Det. " + DETECTIVE));
-    renderSuspects(); renderEvidence(); renderClues();
+    renderSuspects(); renderEvidence(); renderClues(); renderRanking();
   }
 
   function clueCountFor(name) {
@@ -285,11 +298,96 @@
       addTilt(d);
       $("suspects").appendChild(d);
     }
+    renderRanking(); // clue counts feed the Board of Suspicion too
+  }
+
+  // ---------- board of suspicion (private suspect ranking) ----------
+  const RANK_PRESETS = [
+    ["Cleared", 0], ["Ruled out", 5], ["Person of interest", 50], ["Prime suspect", 90]
+  ];
+  const rankOf = (id) => rankings[id] !== undefined ? rankings[id] : 10;
+  // noir heat ramp: muted sepia (cool) → brass → deep red (prime suspect)
+  function rankColor(v) {
+    const lerp = (a, b, t) => Math.round(a + (b - a) * t);
+    const mix = (c1, c2, t) => `rgb(${lerp(c1[0], c2[0], t)},${lerp(c1[1], c2[1], t)},${lerp(c1[2], c2[2], t)})`;
+    const mute = [141, 130, 113], brass = [201, 168, 106], red = [140, 47, 38];
+    return v <= 50 ? mix(mute, brass, v / 50) : mix(brass, red, (v - 50) / 50);
+  }
+
+  function renderRanking() {
+    const box = $("ranking");
+    if (!box || !CASE) return;
+    box.innerHTML = "";
+    const ordered = [...CASE.suspects].sort((a, b) => rankOf(b.id) - rankOf(a.id));
+    for (const s of ordered) {
+      const v = rankOf(s.id);
+      const row = el("div", "rank-row");
+      row.dataset.suspect = s.id;
+
+      const head = el("div", "rank-head");
+      head.appendChild(makePortrait(s.name, s.portrait));
+      const who = el("div", "rank-who");
+      who.appendChild(el("div", "nm", s.name));
+      who.appendChild(el("div", "rl", s.role));
+      head.appendChild(who);
+      const meter = el("div", "rank-meter");
+      meter.textContent = v;
+      meter.style.color = rankColor(v);
+      head.appendChild(meter);
+      row.appendChild(head);
+
+      const facts = el("div", "rank-facts");
+      const nc = clueCountFor(s.name);
+      const log = chats[s.id] || [];
+      const asked = log.filter(m => m.role === "user").length;
+      facts.appendChild(el("span", null, `📌 ${nc} clue${nc === 1 ? "" : "s"}`));
+      facts.appendChild(el("span", null, log.length ? `💬 interrogated · ${asked} question${asked === 1 ? "" : "s"} asked` : "💬 not yet interrogated"));
+      row.appendChild(facts);
+      if (s.alibi) row.appendChild(el("div", "rank-alibi", "Alibi: " + s.alibi));
+
+      const slider = document.createElement("input");
+      slider.type = "range";
+      slider.min = 0; slider.max = 100; slider.value = v;
+      slider.className = "rank-slider";
+      slider.style.accentColor = rankColor(v);
+      slider.setAttribute("aria-label", "suspicion — " + s.name);
+      const chips = el("div", "rank-chips");
+      const paint = (val) => { // live feedback while dragging, no re-sort
+        meter.textContent = val;
+        meter.style.color = rankColor(val);
+        slider.style.accentColor = rankColor(val);
+        [...chips.children].forEach(c =>
+          c.classList.toggle("on", Math.abs(val - +c.dataset.val) <= 5));
+      };
+      slider.addEventListener("input", () => paint(+slider.value));
+      slider.addEventListener("change", () => {
+        rankings[s.id] = +slider.value;
+        persist().catch(() => { /* stays in memory either way */ });
+        renderRanking(); // re-sort by suspicion, on release only
+      });
+      row.appendChild(slider);
+
+      for (const [label, pv] of RANK_PRESETS) {
+        const chip = el("button", "rank-chip" + (Math.abs(v - pv) <= 5 ? " on" : ""), label);
+        chip.type = "button";
+        chip.dataset.val = pv;
+        chip.onclick = () => {
+          rankings[s.id] = pv;
+          sfx("paper", 0.3);
+          persist().catch(() => {});
+          renderRanking();
+        };
+        chips.appendChild(chip);
+      }
+      row.appendChild(chips);
+      box.appendChild(row);
+    }
   }
 
   // ---------- meet the suspects (intro sequence) ----------
   const introKey = () => `deadair_intro_${CODE}_${DETECTIVE}`;
   let introIdx = 0;
+  let introPending = false; // new player: introductions still owed after the report
   function playIntro(rewatch) {
     if (!CASE.suspects.length) return;
     introIdx = 0;
@@ -324,7 +422,12 @@
   function endIntro() {
     localStorage.setItem(introKey(), "seen");
     closeOverlay("intro-overlay");
-    startDossier();
+    const wasPending = introPending;
+    introPending = false;
+    if (wasPending) {
+      startDossier(); // no-op if the report already typed (it starts first now)
+      showNextCue();  // final cue: start asking questions
+    }
   }
 
   // ---------- evidence ----------
@@ -446,13 +549,96 @@
       field.style.minHeight = needed + "px";
   }
 
+  // ---------- archived (tucked-away) notes ----------
+  // Hidden state is keyed by clue identity {text, from} — never array index,
+  // since clue order can shift. Board positions stay index-keyed and are
+  // unaffected: hidden notes are simply not rendered; their pos entries wait.
+  const isHidden = (c) =>
+    hiddenClues.some(h => h.text === clueText(c) && h.from === clueFrom(c));
+  const visibleClues = () => myClues.filter(c => !isHidden(c));
+
+  function archiveClue(c) {
+    const key = { text: clueText(c), from: clueFrom(c) };
+    if (hiddenClues.some(h => h.text === key.text && h.from === key.from)) return;
+    hiddenClues.push(key);
+    sfx("paper");
+    persist().catch(() => { /* state stays in memory either way */ });
+    renderClues(); renderArchivePanel();
+  }
+  function unarchiveClue(h) {
+    hiddenClues = hiddenClues.filter(x => !(x.text === h.text && x.from === h.from));
+    sfx("paper");
+    persist().catch(() => {});
+    renderClues(); renderArchivePanel(); // desktop render re-clamps the note into view
+  }
+  function restoreAllArchived() {
+    if (!hiddenClues.length) return;
+    hiddenClues = [];
+    sfx("paper");
+    persist().catch(() => {});
+    renderClues(); renderArchivePanel();
+  }
+
+  function updateArchiveBtn() {
+    const b = $("archived-btn");
+    if (!b) return;
+    b.textContent = `🗃 archived (${hiddenClues.length})`;
+    b.disabled = !hiddenClues.length;
+  }
+  // the drawer is a fixed-position overlay, so it also opens over the Stage's
+  // fullscreen War Room view (which adopts #boardfield but not the tools bar)
+  function toggleArchiveDrawer(show) {
+    const d = $("archive-drawer");
+    const open = show !== undefined ? show : d.classList.contains("hidden");
+    if (open) renderArchivePanel();
+    d.classList.toggle("hidden", !open);
+  }
+  function renderArchivePanel() {
+    updateArchiveBtn();
+    const list = $("archive-list");
+    if (!list) return;
+    list.innerHTML = "";
+    if (!hiddenClues.length) {
+      list.appendChild(el("div", "archive-empty", "The drawer is empty."));
+      return;
+    }
+    for (const h of hiddenClues) {
+      const row = el("div", "archive-item");
+      const body = el("div", "archive-body");
+      body.appendChild(el("div", "archive-txt", h.text));
+      body.appendChild(el("div", "archive-src", h.from || "Case notes"));
+      const pin = el("button", "ghost archive-pin", "📌 pin back");
+      pin.type = "button";
+      pin.onclick = () => unarchiveClue(h);
+      row.appendChild(body); row.appendChild(pin);
+      list.appendChild(row);
+    }
+  }
+
+  // discreet per-note "tuck into the archive" affordance (subtle until hover/focus/touch)
+  function makeTuckBtn(c) {
+    const b = el("button", "note-tuck", "🗄");
+    b.type = "button";
+    b.title = "Tuck this note into the archive drawer";
+    b.setAttribute("aria-label", "Archive note: " + clueText(c).slice(0, 60));
+    b.addEventListener("pointerdown", (e) => e.stopPropagation()); // don't start a drag
+    b.addEventListener("click", (e) => { e.stopPropagation(); archiveClue(c); });
+    return b;
+  }
+
   function renderClues() {
     const field = $("boardfield");
     // wipe old notes + old mobile list (keep svg / empty msg / summary card)
     for (const n of [...field.querySelectorAll(".clue-note")]) n.remove();
     const oldList = field.querySelector(".board-list");
     if (oldList) oldList.remove();
-    $("cork-empty").classList.toggle("hidden", myClues.length > 0);
+    const visible = visibleClues();
+    const ce = $("cork-empty");
+    ce.textContent = myClues.length
+      ? "Everything's filed in the archive drawer."
+      : "Nothing pinned yet. Go ask some questions.";
+    ce.classList.toggle("hidden", visible.length > 0);
+    updateArchiveBtn();
     // mode split: clean grouped list on phones, spatial board on desktop
     if (desktop()) renderCluesDesktop();
     else renderCluesMobile();
@@ -469,10 +655,11 @@
   // DESKTOP ONLY (>=760px): spatial board — draggable notes, red strings, spiral placement
   function renderCluesDesktop() {
     const field = $("boardfield");
-    if (!myClues.length) { drawStrings(); return; }
+    if (!visibleClues().length) { drawStrings(); return; }
     const pos = loadBoardPos();
     let changed = false;
     myClues.forEach((c, i) => {
+      if (isHidden(c)) return; // archived: keep pos[i] stored, just don't render
       if (!pos[i]) { pos[i] = autoPlacePos(i); changed = true; }
       const note = el("div", "clue-note");
       note.dataset.idx = i;
@@ -482,6 +669,7 @@
       note.title = clueText(c); // full text on hover/long-press (plain attribute, never HTML)
       note.appendChild(el("span", "txt", clueText(c)));
       note.appendChild(el("span", "src", clueFrom(c)));
+      note.appendChild(makeTuckBtn(c));
       note.tabIndex = 0;
       makeDraggable(note);
       addTilt(note, 4);
@@ -505,7 +693,8 @@
   // No absolute positioning, no drag, no strings, no localStorage positions.
   function renderCluesMobile() {
     const field = $("boardfield");
-    if (!myClues.length && !notesSummary) return;
+    const visible = visibleClues();
+    if (!visible.length && !notesSummary) return;
     const list = el("div", "board-list");
     // AI summary: collapsible section pinned at the TOP of the board
     if (notesSummary) {
@@ -518,10 +707,10 @@
       det.appendChild(el("div", "summary-body", notesSummary));
       list.appendChild(det);
     }
-    if (!myClues.length) { field.appendChild(list); return; }
-    // group clues by source, in first-seen order
+    if (!visible.length) { field.appendChild(list); return; }
+    // group clues by source, in first-seen order (archived notes excluded)
     const groups = {}, order = [];
-    for (const c of myClues) {
+    for (const c of visible) {
       const f = clueFrom(c);
       if (!groups[f]) { groups[f] = []; order.push(f); }
       groups[f].push(c);
@@ -535,8 +724,12 @@
       sum.appendChild(el("span", "cnt", groups[f].length + " pinned"));
       sum.appendChild(el("span", "tw"));
       det.appendChild(sum);
-      for (const c of groups[f])
-        det.appendChild(el("div", "mnote", clueText(c)));
+      for (const c of groups[f]) {
+        const mn = el("div", "mnote");
+        mn.appendChild(el("span", "mtxt", clueText(c)));
+        mn.appendChild(makeTuckBtn(c));
+        det.appendChild(mn);
+      }
       list.appendChild(det);
     });
     field.appendChild(list);
@@ -844,7 +1037,7 @@ HARD RULES:
 
   async function persist() {
     await playerRef.set({ clues: myClues, chats, examined, accusation: accused, notesSummary,
-      lastActive: new Date().toISOString() }, { merge: true });
+      hiddenClues, rankings, lastActive: new Date().toISOString() }, { merge: true });
   }
 
   // ---------- narration ----------
@@ -929,7 +1122,7 @@ HARD RULES:
 
   // ---------- accusation ----------
   function updateSealState() {
-    $("seal-btn").disabled = !(pickedKiller && $("pick-weapon").value && $("pick-location").value);
+    $("seal-btn").disabled = !(pickedKiller && $("pick-weapon").value.trim() && $("pick-location").value.trim());
   }
 
   function renderLineup() {
@@ -969,18 +1162,13 @@ HARD RULES:
     if (accused) return; // accusation is final
     pickedKiller = null;
     renderLineup();
-    const fill = (id, placeholder, items) => {
-      const sel = $(id);
-      sel.innerHTML = "";
-      const ph = new Option(placeholder, "");
-      ph.disabled = true;
-      ph.selected = true;
-      sel.add(ph);
-      for (const x of shuffle(items)) sel.add(new Option(x, x));
-      sel.onchange = updateSealState;
-    };
-    fill("pick-weapon", "choose the weapon…", CASE.weapons);
-    fill("pick-location", "choose the location…", CASE.locations);
+    // free-text fields: the warrant never reveals the possibility space
+    for (const id of ["pick-weapon", "pick-location"]) {
+      const inp = $(id);
+      inp.value = "";
+      inp.oninput = updateSealState;
+    }
+    $("seal-btn").innerHTML = "Press<br>the<br>Seal";
     updateSealState();
     $("w-code").textContent = CODE;
     $("w-code2").textContent = CODE;
@@ -991,22 +1179,60 @@ HARD RULES:
   }
   function hideAccuse() { closeOverlay("accuse-overlay"); }
 
+  // lenient local fallback when the AI audit is unreachable: normalize case,
+  // punctuation and leading articles, then compare ("conservatory" ≈ "the conservatory")
+  function normAnswer(s) {
+    return String(s).toLowerCase()
+      .replace(/[^\p{L}\p{N} ]/gu, " ")
+      .replace(/\b(the|a|an)\b/g, " ")
+      .replace(/\s+/g, " ").trim();
+  }
+  const localMatch = (typed, truth) => normAnswer(typed) === normAnswer(truth);
+
+  // Claude judges whether the typed weapon/location are close enough to the truth
+  async function auditAccusation(weapon, location) {
+    const sol = CASE.solution;
+    try {
+      const raw = await SandboxAPI.claude(
+        `You are the forensic auditor on a murder case, checking an arrest warrant before it is sealed.\n` +
+        `TRUE WEAPON: "${sol.weapon}"\nTRUE LOCATION: "${sol.location}"\n` +
+        `The detective wrote — weapon: "${weapon}", location: "${location}".\n` +
+        `For each answer decide if it is a close enough representation of the truth. ` +
+        `Accept typos, minor paraphrase, synonyms, and reasonable specificity shifts ("the conservatory" vs "conservatory" passes). ` +
+        `Fail an answer only if it names a genuinely different object or place ("ice pick" for an ice scraper fails). ` +
+        `Fail answers too vague to credit ("knife" when the true weapon is "the antique letter opener" fails; "somewhere upstairs" always fails).\n` +
+        `Reply with STRICT JSON only, no commentary: {"weapon": true or false, "location": true or false}`,
+        { maxTokens: 300 });
+      const v = JSON.parse((raw.match(/\{[\s\S]*\}/) || ["{}"])[0]);
+      if (typeof v.weapon !== "boolean" || typeof v.location !== "boolean") throw new Error("bad verdict");
+      return { weapon: v.weapon, location: v.location };
+    } catch (e) {
+      console.warn("[Dead Air] AI accusation audit failed, using lenient local comparison:", e && e.message ? e.message : e);
+      return { weapon: localMatch(weapon, sol.weapon), location: localMatch(location, sol.location) };
+    }
+  }
+
   async function submitAccusation() {
     if (accused) return; // already sealed
     const seal = $("seal-btn");
     const suspect = pickedKiller;
-    const weapon = $("pick-weapon").value, location = $("pick-location").value;
+    const weapon = $("pick-weapon").value.trim(), location = $("pick-location").value.trim();
     if (!suspect || !weapon || !location) return;
     seal.disabled = true;
+    seal.textContent = "Consulting the coroner…";
     try {
+      const verdict = await auditAccusation(weapon, location);
       accused = {
         killerId: suspect.id,
         weapon, location,
+        weaponTyped: weapon, locationTyped: location,
+        weaponCorrect: verdict.weapon, locationCorrect: verdict.location,
         at: new Date().toISOString()
       };
       await persist();
     } catch (e) {
       accused = null;
+      seal.innerHTML = "Press<br>the<br>Seal";
       updateSealState();
       return;
     }
@@ -1037,9 +1263,10 @@ HARD RULES:
   async function showReveal(fresh) {
     const sol = CASE.solution;
     const killerName = CASE.suspects.find(s => s.id === sol.killerId)?.name || sol.killerId;
+    // AI-audited verdicts when present; exact-match for pre-audit (dropdown-era) saves
     const k = accused.killerId === sol.killerId,
-          w = accused.weapon === sol.weapon,
-          l = accused.location === sol.location;
+          w = accused.weaponCorrect !== undefined ? accused.weaponCorrect : accused.weapon === sol.weapon,
+          l = accused.locationCorrect !== undefined ? accused.locationCorrect : accused.location === sol.location;
     const score = [k, w, l].filter(Boolean).length;
     const stamp = score === 3 ? ["Case Closed", "win"] : k ? ["Killer Caught", "partial"] : ["Case Unsolved", "loss"];
     $("stamp-slot").innerHTML = "";
