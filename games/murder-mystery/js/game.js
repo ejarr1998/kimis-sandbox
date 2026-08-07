@@ -246,8 +246,12 @@
   function startDossier() {
     if (dossierStarted) return;
     dossierStarted = true;
-    // dossier types itself out; tap the folder to skip
-    typeInto($("opening"), CASE.openingScene, $("opening-panel")).then(showNextCue);
+    // The report is reference material you'll re-read all game, not a reveal,
+    // so it's shown in full immediately. (The Stage's fullscreen file view has
+    // always rendered it this way; this makes the desk copy match.) The
+    // typewriter is still used where it earns its keep: suspect replies.
+    $("opening").textContent = CASE.openingScene;
+    showNextCue();
   }
   // one-line orientation cue once the report has typed itself out.
   // New players get the introductions first ("meet the persons of interest");
