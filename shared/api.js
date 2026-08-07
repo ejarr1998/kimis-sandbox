@@ -7,6 +7,7 @@
  *   const reply = await SandboxAPI.claude("Say hello");
  *   const img   = await SandboxAPI.grokImage("a cat astronaut");
  *   const audio = await SandboxAPI.elevenTTS("Hello world", voiceId);
+ *   const sfx   = await SandboxAPI.elevenSFX("rain on a tin roof");
  *   const app   = await SandboxAPI.firebaseApp();
  */
 
@@ -110,6 +111,22 @@ const SandboxAPI = (() => {
     return URL.createObjectURL(blob);
   }
 
+  // ---------- ElevenLabs sound effects ----------
+  // Returns an object URL for the generated audio.
+  async function elevenSFX(description, { durationSeconds = 3 } = {}) {
+    const res = await fetch("https://api.elevenlabs.io/v1/sound-effects", {
+      method: "POST",
+      headers: {
+        "xi-api-key": key("elevenlabs"),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ text: description, duration_seconds: durationSeconds })
+    });
+    if (!res.ok) throw new Error("ElevenLabs SFX " + res.status + ": " + (await res.text()).slice(0, 120));
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  }
+
   // ---------- Firebase loader ----------
   // Loads Firebase (compat CDN) on demand and initializes it with the baked-in
   // config (a localStorage override from settings.html takes priority if present).
@@ -133,5 +150,5 @@ const SandboxAPI = (() => {
     });
   }
 
-  return { claude, grokText, grokImage, elevenTTS, firebaseApp };
+  return { claude, grokText, grokImage, elevenTTS, elevenSFX, firebaseApp };
 })();
