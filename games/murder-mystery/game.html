@@ -609,6 +609,8 @@
     width: 14px; height: 14px; border-radius: 50%;
     background: var(--ink); box-shadow: inset 0 1px 2px rgba(255,255,255,0.25);
   }
+  @keyframes evfade { from { opacity: 0; transform: translateY(6px); } }
+  .fade-in { animation: evfade .35s ease both; }
   .lamp-tag .en { font-family: "Special Elite", monospace; font-size: 1.15rem; padding-left: 1.6rem; }
   .lamp-tag .ed { font-size: 1.02rem; line-height: 1.75; font-style: italic; color: #45391f; margin-top: 0.9rem; min-height: 3rem; }
   .lamp-tag .pinned-note { font-family: "Special Elite", monospace; font-size: 0.7rem; color: var(--red); margin-top: 0.8rem; letter-spacing: 0.08em; }
@@ -654,7 +656,7 @@
     .warrant-no { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .panel, .bubble, .verdict-stamp, .mug.accused .accused-stamp { animation: none !important; }
+    .panel, .bubble, .verdict-stamp, .mug.accused .accused-stamp, .fade-in { animation: none !important; }
     * { transition-duration: 0.01ms !important; }
   }
 </style>
@@ -1127,7 +1129,7 @@
     card.appendChild(makePortrait(s.name, s.portrait));
     card.appendChild(el("div", "nm", s.name));
     card.appendChild(el("div", "rl", s.role));
-    card.appendChild(el("div", "intro-line", s.intro || `“${s.role}”`));
+    if (s.intro) card.appendChild(el("div", "intro-line", "“" + s.intro + "”"));
     const dots = $("intro-dots");
     dots.innerHTML = "";
     CASE.suspects.forEach((_, i) => {
@@ -1192,7 +1194,11 @@
     $("ev-pinned").textContent = "";
     openOverlay("evidence-overlay");
     sfx("paper");
-    await typeInto($("ev-desc"), ev.description, $("lamp-tag"));
+    const evDesc = $("ev-desc");
+    evDesc.textContent = ev.description;
+    evDesc.classList.remove("fade-in");
+    void evDesc.offsetWidth; // restart the animation
+    evDesc.classList.add("fade-in");
     if (firstTime) {
       examined.push(ev.id);
       const fresh = (ev.reveals || []).filter(f => !myClues.some(c => overlap(clueText(c), f)));
