@@ -344,6 +344,48 @@
   }
   #organize-status { color: #c9b788; font-size: 0.8rem; }
 
+  /* ---------- mobile board: grouped list mode (spatial board stays desktop-only) ---------- */
+  @media (max-width: 759px) {
+    /* no strings, no floating summary card, no auto-arrange in list mode */
+    #strings, #summary-card, #arrange-btn { display: none !important; }
+    #boardfield { min-height: 0; overflow: visible; }
+    .board-list { display: flex; flex-direction: column; gap: 0.7rem; position: relative; z-index: 2; padding: 0.4rem 0.2rem; }
+    .cluegroup {
+      background: linear-gradient(170deg, rgba(239,230,208,0.07), rgba(239,230,208,0.03));
+      border: 1px solid rgba(216,196,154,0.25);
+      border-radius: 4px;
+    }
+    .cluegroup > summary {
+      cursor: pointer; list-style: none;
+      padding: 0.65rem 0.8rem;
+      font-family: "Special Elite", monospace; font-size: 0.78rem;
+      color: #d8c49a; letter-spacing: 0.04em;
+      display: flex; align-items: center; gap: 0.55rem;
+    }
+    .cluegroup > summary::-webkit-details-marker { display: none; }
+    .cluegroup > summary .cnt { color: var(--mute); font-size: 0.68rem; }
+    .cluegroup > summary .tw { margin-left: auto; }
+    .cluegroup > summary .tw::before { content: "▸"; }
+    .cluegroup[open] > summary .tw::before { content: "▾"; }
+    .mnote {
+      background: linear-gradient(170deg, #efe6d0, #ddd0b2);
+      color: #2c2519;
+      border-left: 4px solid var(--red); /* evokes the string */
+      border-radius: 2px;
+      margin: 0 0.6rem 0.6rem;
+      padding: 0.65rem 0.8rem;
+      font-size: 0.92rem; line-height: 1.55;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
+    .summary-group .summary-body {
+      background: linear-gradient(170deg, #efe6d0, #ddd0b2);
+      color: #2c2519; border-radius: 2px;
+      margin: 0 0.6rem 0.6rem; padding: 0.7rem 0.9rem;
+      font-size: 0.88rem; line-height: 1.55; white-space: pre-wrap;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
+  }
+
   /* ---------- zone focus (hover zoom + fullscreen focus mode) ---------- */
   .panel-title { user-select: none; }
   .expand-btn {
@@ -1404,9 +1446,27 @@
 
   function renderClues() {
     const field = $("boardfield");
-    // wipe old notes (keep svg / empty msg / summary card)
+    // wipe old notes + old mobile list (keep svg / empty msg / summary card)
     for (const n of [...field.querySelectorAll(".clue-note")]) n.remove();
+    const oldList = field.querySelector(".board-list");
+    if (oldList) oldList.remove();
     $("cork-empty").classList.toggle("hidden", myClues.length > 0);
+    // mode split: clean grouped list on phones, spatial board on desktop
+    if (desktop()) renderCluesDesktop();
+    else renderCluesMobile();
+    // badge the Board tab when new clues arrive while it's not active
+    if (myClues.length > lastClueCount) {
+      const boardZone = document.querySelector("#game .zone-board");
+      const boardBtn = document.querySelector('#tabbar button[data-tab="board"]');
+      if (boardBtn && boardZone && !boardZone.classList.contains("active"))
+        boardBtn.classList.add("has-new");
+    }
+    lastClueCount = myClues.length;
+  }
+
+  // DESKTOP ONLY (>=760px): spatial board — draggable notes, red strings, spiral placement
+  function renderCluesDesktop() {
+    const field = $("boardfield");
     if (!myClues.length) { drawStrings(); return; }
     const pos = loadBoardPos();
     let changed = false;
@@ -1434,17 +1494,55 @@
       }
     });
     if (changed) saveBoardPos(pos);
-    // badge the Board tab when new clues arrive while it's not active
-    if (myClues.length > lastClueCount) {
-      const boardZone = document.querySelector("#game .zone-board");
-      const boardBtn = document.querySelector('#tabbar button[data-tab="board"]');
-      if (boardBtn && boardZone && !boardZone.classList.contains("active"))
-        boardBtn.classList.add("has-new");
-    }
-    lastClueCount = myClues.length;
     fitBoardHeight();
     requestAnimationFrame(drawStrings);
   }
+
+  // MOBILE ONLY (<760px): grouped list — collapsible source sections, full-width
+  // paper notes (full clue text, no clamp), AI summary pinned at top.
+  // No absolute positioning, no drag, no strings, no localStorage positions.
+  function renderCluesMobile() {
+    const field = $("boardfield");
+    if (!myClues.length && !notesSummary) return;
+    const list = el("div", "board-list");
+    // AI summary: collapsible section pinned at the TOP of the board
+    if (notesSummary) {
+      const det = document.createElement("details");
+      det.className = "cluegroup summary-group"; // collapsed by default (no [open])
+      const sum = document.createElement("summary");
+      sum.appendChild(el("span", null, "📋 Typed summary"));
+      sum.appendChild(el("span", "tw"));
+      det.appendChild(sum);
+      det.appendChild(el("div", "summary-body", notesSummary));
+      list.appendChild(det);
+    }
+    if (!myClues.length) { field.appendChild(list); return; }
+    // group clues by source, in first-seen order
+    const groups = {}, order = [];
+    for (const c of myClues) {
+      const f = clueFrom(c);
+      if (!groups[f]) { groups[f] = []; order.push(f); }
+      groups[f].push(c);
+    }
+    order.forEach((f, gi) => {
+      const det = document.createElement("details");
+      det.className = "cluegroup";
+      if (gi === 0) det.open = true; // first group open, others closed
+      const sum = document.createElement("summary");
+      sum.appendChild(el("span", null, f));
+      sum.appendChild(el("span", "cnt", groups[f].length + " pinned"));
+      sum.appendChild(el("span", "tw"));
+      det.appendChild(sum);
+      for (const c of groups[f])
+        det.appendChild(el("div", "mnote", clueText(c)));
+      list.appendChild(det);
+    });
+    field.appendChild(list);
+  }
+  // re-render when the viewport crosses the mode boundary (rotation, resize, devtools)
+  const boardModeMQ = window.matchMedia("(max-width: 759px)");
+  if (boardModeMQ.addEventListener) boardModeMQ.addEventListener("change", () => renderClues());
+  else boardModeMQ.addListener(() => renderClues());
 
   function makeDraggable(note) {
     note.addEventListener("pointerdown", (e) => {
@@ -1596,6 +1694,7 @@ Max 250 words total. Be specific with names, never say "the suspect".`,
         { maxTokens: 600 });
       $("summary-card").textContent = notesSummary;
       $("summary-card").classList.remove("hidden");
+      if (!desktop()) renderClues(); // refresh the mobile "📋 Typed summary" section
       $("organize-status").textContent = "typed " + new Date().toLocaleTimeString();
       sfx("paper");
       await persist();
