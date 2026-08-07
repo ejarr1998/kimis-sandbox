@@ -32,7 +32,7 @@ const SandboxAPI = (() => {
   // NOTE: Anthropic blocks direct browser calls by default (CORS).
   // We pass the 'anthropic-dangerous-direct-browser-access' header which
   // Anthropic supports for exactly this kind of client-side playground use.
-  async function claude(prompt, { model = "claude-sonnet-4-5", system = "", maxTokens = 1024 } = {}) {
+  async function claude(prompt, { model = "claude-sonnet-5", system = "", maxTokens = 1024 } = {}) {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
