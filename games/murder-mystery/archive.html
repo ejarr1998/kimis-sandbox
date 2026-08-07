@@ -44,6 +44,7 @@
   .case:nth-child(odd) { transform: rotate(-0.3deg); }
   .case:nth-child(even) { transform: rotate(0.3deg); }
   .case:hover { transform: rotate(0) translateY(-2px); }
+  :focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
   .case .code {
     float: right; font-family: "Special Elite", monospace;
     color: var(--red); letter-spacing: 0.3em; font-size: 0.95rem;
@@ -56,6 +57,49 @@
   .foot { text-align: center; margin-top: 1.6rem; }
   .foot a { color: var(--mute); font-size: 0.85rem; text-decoration: none; }
   .foot a:hover { color: var(--paper); text-decoration: underline; }
+
+  .join-panel {
+    background: linear-gradient(175deg, #221d17, #1c1813);
+    border: 1px solid var(--line); border-left: 5px solid var(--red);
+    border-radius: 3px;
+    padding: 1rem 1.1rem; margin: -0.4rem 0 1rem;
+    box-shadow: 0 5px 16px rgba(0,0,0,0.5);
+    animation: rise .25s ease both;
+  }
+  .join-panel .jp-title {
+    font-family: "Special Elite", monospace; font-size: 0.72rem;
+    letter-spacing: 0.25em; text-transform: uppercase; color: var(--brass);
+    margin-bottom: 0.7rem;
+  }
+  .join-panel input {
+    width: 100%; padding: 0.65rem 0.75rem; background: var(--ink);
+    border: 1px solid var(--line); border-radius: 3px;
+    color: var(--paper); font-family: inherit; font-size: 1rem;
+  }
+  .join-panel input::placeholder { color: #857a66; }
+  .join-panel .jp-hint { font-size: 0.78rem; color: var(--mute); font-style: italic; margin: 0.35rem 0 0; }
+  .join-panel .jp-err { color: #d98a85; font-size: 0.85rem; font-style: italic;
+    margin: 0.45rem 0 0; min-height: 1.1rem; }
+  .join-panel .jp-actions { display: flex; gap: 0.6rem; margin-top: 0.7rem; flex-wrap: wrap; }
+  .stamp-btn {
+    flex: 1 1 12rem;
+    font-family: "Special Elite", monospace;
+    background: var(--red); color: var(--paper);
+    padding: 0.7rem; border: none; border-radius: 3px;
+    font-size: 0.85rem; letter-spacing: 0.15em; text-transform: uppercase;
+    cursor: pointer; box-shadow: 0 3px 0 #5c1f1c, 0 5px 12px rgba(0,0,0,0.4);
+    transition: transform .1s, box-shadow .1s;
+  }
+  .stamp-btn:hover { transform: translateY(1px); box-shadow: 0 2px 0 #5c1f1c, 0 4px 10px rgba(0,0,0,0.4); }
+  .ghost-btn {
+    flex: 0 1 auto;
+    font-family: "Special Elite", monospace;
+    background: transparent; color: var(--mute);
+    padding: 0.7rem 0.9rem; border: 1px solid var(--line); border-radius: 3px;
+    font-size: 0.85rem; letter-spacing: 0.15em; text-transform: uppercase;
+    cursor: pointer;
+  }
+  .ghost-btn:hover { color: var(--paper); border-color: var(--mute); }
 </style>
 </head>
 <body>
@@ -73,6 +117,87 @@
 
 <script src="../../shared/api.js"></script>
 <script>
+  // Shared detective-name validation rules (mirrored in index.html).
+  function validateDetectiveName(raw) {
+    const name = (raw || "").trim();
+    if (!name) return { ok: false, error: "Enter your detective name." };
+    if (name.length > 24) return { ok: false, error: "Detective name must be 24 characters or fewer." };
+    if (name.includes("/") || name.includes("."))
+      return { ok: false, error: "Detective name can't contain / or . characters." };
+    if (!/^[\p{L}\p{N} \-_']+$/u.test(name))
+      return { ok: false, error: "Detective name may only use letters, numbers, spaces, and - _ ' characters." };
+    return { ok: true, name };
+  }
+
+  function el(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+
+  // Handles Firestore Timestamps, strings, numbers, and junk.
+  function formatFiledDate(v) {
+    try {
+      let d = null;
+      if (v && typeof v.toDate === "function") d = v.toDate();
+      else if (typeof v === "string" || typeof v === "number") d = new Date(v);
+      if (!d || isNaN(d.getTime())) return "date unknown";
+      return d.toLocaleString();
+    } catch (e) {
+      return "date unknown";
+    }
+  }
+
+  let joinPanel = null;
+
+  function closeJoin() {
+    if (joinPanel) { joinPanel.remove(); joinPanel = null; }
+  }
+
+  function openJoin(code, card) {
+    if (joinPanel && joinPanel.dataset.code === code) { closeJoin(); return; }
+    closeJoin();
+
+    const panel = el("div", "join-panel");
+    panel.dataset.code = code;
+    panel.appendChild(el("div", "jp-title", "Case " + code + " — sign in, detective"));
+
+    const input = document.createElement("input");
+    input.maxLength = 24;
+    input.placeholder = "Your detective name";
+    input.setAttribute("aria-label", "Your detective name");
+    panel.appendChild(input);
+
+    panel.appendChild(el("div", "jp-hint",
+      "Use the SAME name to resume an open investigation."));
+    const err = el("div", "jp-err");
+    err.setAttribute("role", "alert");
+    panel.appendChild(err);
+
+    const actions = el("div", "jp-actions");
+    const begin = el("button", "stamp-btn", "🔍 Begin Investigation");
+    const cancel = el("button", "ghost-btn", "Cancel");
+    actions.append(begin, cancel);
+    panel.appendChild(actions);
+
+    const submit = () => {
+      const check = validateDetectiveName(input.value);
+      if (!check.ok) { err.textContent = "⚠️ " + check.error; input.focus(); return; }
+      location.href = `game.html?case=${encodeURIComponent(code)}&detective=${encodeURIComponent(check.name)}`;
+    };
+    begin.addEventListener("click", submit);
+    cancel.addEventListener("click", () => { closeJoin(); card.focus(); });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); submit(); }
+      if (e.key === "Escape") { closeJoin(); card.focus(); }
+    });
+
+    card.after(panel);
+    joinPanel = panel;
+    input.focus();
+  }
+
   async function boot() {
     try {
       await SandboxAPI.firebaseApp();
@@ -88,36 +213,41 @@
 
       for (const doc of snap.docs) {
         const c = doc.data();
-        let playersHtml = "";
+        const div = el("div", "case");
+        div.tabIndex = 0;
+        div.setAttribute("role", "button");
+        div.setAttribute("aria-label", "Take case " + doc.id);
+
+        div.appendChild(el("span", "code", doc.id));
+        div.appendChild(el("div", "ct", c.title || "Untitled case"));
+        div.appendChild(el("div", "cm",
+          "Victim: " + (c.victim && c.victim.name ? c.victim.name : "?") +
+          " · " + (c.suspects ? c.suspects.length : "?") + " suspects · filed " +
+          formatFiledDate(c.createdAt)));
+
         try {
           const players = await db.collection("cases").doc(doc.id).collection("players").get();
           if (!players.empty) {
-            playersHtml = '<div class="players">🕵️ ' + players.docs.map(p => {
-              const d = p.data();
-              const done = !!d.accusation;
-              return `<span class="${done ? "p-done" : "p-open"}">${p.id}${done ? " ✓ closed" : " … open"}</span>`;
-            }).join(" &nbsp;·&nbsp; ") + "</div>";
+            const row = el("div", "players");
+            row.append("🕵️ ");
+            players.docs.forEach((p, i) => {
+              if (i > 0) row.append(" · ");
+              const done = !!p.data().accusation;
+              row.appendChild(el("span", done ? "p-done" : "p-open",
+                p.id + (done ? " ✓ closed" : " … open")));
+            });
+            div.appendChild(row);
           }
         } catch (e) { /* players list best-effort */ }
 
-        const div = document.createElement("div");
-        div.className = "case";
-        div.innerHTML = `<span class="code">${doc.id}</span>
-          <div class="ct">${c.title || "Untitled case"}</div>
-          <div class="cm">Victim: ${c.victim ? c.victim.name : "?"} · ${c.suspects ? c.suspects.length : "?"} suspects ·
-             filed ${new Date(c.createdAt).toLocaleString()}</div>` + playersHtml;
-        div.onclick = () => joinPrompt(doc.id);
+        div.addEventListener("click", () => openJoin(doc.id, div));
+        div.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openJoin(doc.id, div); }
+        });
         box.appendChild(div);
       }
     } catch (e) {
       document.getElementById("status").textContent = "❌ " + e.message;
-    }
-  }
-
-  function joinPrompt(code) {
-    const name = prompt("Case " + code + " — enter your detective name (use the SAME name to resume an open investigation):");
-    if (name && name.trim()) {
-      location.href = `game.html?case=${encodeURIComponent(code)}&detective=${encodeURIComponent(name.trim())}`;
     }
   }
 
