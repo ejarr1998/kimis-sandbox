@@ -659,10 +659,13 @@
   }
 
   function updateArchiveBtn() {
-    const b = $("archived-btn");
-    if (!b) return;
-    b.textContent = `🗃 archived (${hiddenClues.length})`;
-    b.disabled = !hiddenClues.length;
+    // There can be more than one archive button: the desk tools bar, plus the
+    // Stage's war room toolbar (which doesn't adopt the desk bar). Drive them
+    // all off one attribute so the count never goes stale in fullscreen.
+    for (const b of document.querySelectorAll("[data-archive-btn]")) {
+      b.textContent = `🗃 archived (${hiddenClues.length})`;
+      b.disabled = !hiddenClues.length;
+    }
   }
   // the drawer is a fixed-position overlay, so it also opens over the Stage's
   // fullscreen War Room view (which adopts #boardfield but not the tools bar)

@@ -405,7 +405,16 @@ const Stage = (() => {
     const str = el("button", "ghost", "🧵 strings on/off");
     str.onclick = () => b.classList.toggle("no-strings");
     bar.appendChild(str);
+    // The archive drawer is a fixed overlay (z 130) so it already floats above
+    // the Stage — but its only trigger lived in the desk tools bar, which the
+    // war room doesn't adopt. Without this, tucked notes are unreachable in
+    // fullscreen. data-archive-btn keeps the count in sync with the desk copy.
+    const arch = el("button", "ghost", "🗃 archived (0)");
+    arch.dataset.archiveBtn = "1";
+    arch.onclick = () => toggleArchiveDrawer();
+    bar.appendChild(arch);
     b.appendChild(bar);
+    updateArchiveBtn(); // paint the real count now that the button exists
     // adopt the live corkboard field (keeps #boardfield + #strings ids valid)
     const field = $("boardfield");
     pane.restore = adopt(field, b);
