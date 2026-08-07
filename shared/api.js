@@ -38,7 +38,11 @@ const SandboxAPI = (() => {
   // and return ZERO text — which callers then report as "AI did not return
   // JSON". So we disable thinking by default here; callers that want it can
   // pass { thinking: { type: "adaptive", display: "summarized" } }.
-  async function claude(prompt, { model = "claude-sonnet-5", system = "", maxTokens = 1024, thinking = null } = {}) {
+  // `allowPartial`: prose callers (summaries, narration) would rather show a
+  // reply that lost its last sentence than nothing at all. Callers that parse
+  // the result — JSON, case generation — must leave it false, since half a
+  // JSON object is worse than a clean failure.
+  async function claude(prompt, { model = "claude-sonnet-5", system = "", maxTokens = 1024, thinking = null, allowPartial = false } = {}) {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -61,8 +65,11 @@ const SandboxAPI = (() => {
     const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
     if (!text && data.stop_reason === "max_tokens")
       throw new Error(`Claude used all ${maxTokens} tokens before writing any reply (increase maxTokens)`);
-    if (data.stop_reason === "max_tokens")
-      throw new Error(`Claude reply was cut off at the ${maxTokens}-token limit (increase maxTokens)`);
+    if (data.stop_reason === "max_tokens") {
+      if (!allowPartial)
+        throw new Error(`Claude reply was cut off at the ${maxTokens}-token limit (increase maxTokens)`);
+      console.warn(`[SandboxAPI] reply hit the ${maxTokens}-token limit; returning it truncated.`);
+    }
     return text;
   }
 

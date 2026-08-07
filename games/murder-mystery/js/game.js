@@ -972,7 +972,14 @@ ALIBIS — one line per person: their claim + whether anything corroborates or c
 CONTRADICTIONS — any facts that clash, each in one line
 LEADS — 2-4 precise questions the detective still needs to ask, and to whom
 Max 250 words total. Be specific with names, never say "the suspect".`,
-        { maxTokens: 600 });
+        { maxTokens: 1500, allowPartial: true });
+      // 250 words is ~400 tokens, but the log grows all game and the model runs
+      // long, so the budget is generous. If it still clips, drop the dangling
+      // final line rather than showing a sentence that stops mid-word.
+      if (notesSummary && !/[.!?)\]]\s*$/.test(notesSummary)) {
+        const lines = notesSummary.split("\n");
+        if (lines.length > 1) { lines.pop(); notesSummary = lines.join("\n").trimEnd(); }
+      }
       $("summary-card").textContent = notesSummary;
       $("summary-card").classList.remove("hidden");
       if (!desktop()) renderClues(); // refresh the mobile "📋 Typed summary" section
@@ -980,7 +987,11 @@ Max 250 words total. Be specific with names, never say "the suspect".`,
       sfx("paper");
       await persist();
     } catch (e) {
-      $("organize-status").textContent = "❌ " + e.message.slice(0, 60);
+      // Don't hard-slice the message: that's how "(increase ma" reached the UI.
+      const msg = String(e.message || e);
+      const el = $("organize-status");
+      el.textContent = "❌ " + (msg.length > 90 ? msg.slice(0, 89).replace(/\s+\S*$/, "") + "…" : msg);
+      el.title = msg; // full text on hover
     }
     btn.disabled = false;
   }
@@ -1103,7 +1114,7 @@ HARD RULES:
     try { await persist(); } catch (e) { /* keep the question in memory */ }
     try {
       const history = chats[sid].slice(-20).map(m => `${m.role === "user" ? "Detective" : currentSuspect.name}: ${m.text}`).join("\n");
-      const rawReply = await SandboxAPI.claude(history, { system: suspectPrompt(currentSuspect), maxTokens: 250 });
+      const rawReply = await SandboxAPI.claude(history, { system: suspectPrompt(currentSuspect), maxTokens: 250, allowPartial: true });
       const reply = cleanReply(rawReply, currentSuspect.name) || "…";
       chats[sid].push({ role: "assistant", text: reply });
       $("typing").textContent = "";
@@ -1251,7 +1262,7 @@ HARD RULES:
       const history = log.slice(-20)
         .map(m => `${m.role === "user" ? "Detective " + (m.by || "") : s.name}: ${m.text}`)
         .join("\n");
-      const rawReply = await SandboxAPI.claude(history, { system: suspectPrompt(s), maxTokens: 250 });
+      const rawReply = await SandboxAPI.claude(history, { system: suspectPrompt(s), maxTokens: 250, allowPartial: true });
       const reply = cleanReply(rawReply, s.name) || "…";
 
       await Coop.postMessage(sid, { role: "assistant", text: reply });
