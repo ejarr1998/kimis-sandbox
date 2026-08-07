@@ -32,7 +32,7 @@ const SandboxAPI = (() => {
   // NOTE: Anthropic blocks direct browser calls by default (CORS).
   // We pass the 'anthropic-dangerous-direct-browser-access' header which
   // Anthropic supports for exactly this kind of client-side playground use.
-  async function claude(prompt, { model = "claude-sonnet-5", system = "", maxTokens = 1024 } = {}) {
+  async function claude(prompt, { model = "claude-sonnet-4-5", system = "", maxTokens = 1024 } = {}) {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -113,8 +113,9 @@ const SandboxAPI = (() => {
 
   // ---------- ElevenLabs sound effects ----------
   // Returns an object URL for the generated audio.
+  // Endpoint is /v1/sound-generation (/v1/sound-effects does not exist — 404s).
   async function elevenSFX(description, { durationSeconds = 3 } = {}) {
-    const res = await fetch("https://api.elevenlabs.io/v1/sound-effects", {
+    const res = await fetch("https://api.elevenlabs.io/v1/sound-generation", {
       method: "POST",
       headers: {
         "xi-api-key": key("elevenlabs"),
