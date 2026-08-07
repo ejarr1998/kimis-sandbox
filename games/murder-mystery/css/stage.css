@@ -312,3 +312,28 @@ body.split-dragging-v, body.split-dragging-v * { cursor: row-resize !important; 
   .pane-body.suspicion-room { --rank-cols: 1 !important; }
   .suspicion-room .war-sizes { display: none; }
 }
+
+/* ---------- swap sides ----------
+   Sits in the right-hand group beside "back to the desk". Both buttons carry
+   margin-left:auto, so when swap is visible it takes the slack and close needs
+   its auto margin cancelled or the two drift apart. */
+.stage-swap {
+  margin-left: auto;
+  background: none; color: var(--brass);
+  border: 1px solid rgba(201,168,106,0.45); border-radius: 3px;
+  font-family: "Special Elite", monospace; font-size: 0.7rem;
+  letter-spacing: 0.15em; text-transform: uppercase;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+}
+.stage-swap:hover { background: rgba(201,168,106,0.12); }
+.stage-swap.hidden { display: none; }
+.stage-swap:not(.hidden) ~ .stage-close { margin-left: 0.5rem; }
+
+@media (max-width: 620px) {
+  /* keep the bar on one line: the arrow alone still reads as "swap" */
+  .stage-swap { font-size: 0.85rem; padding: 0.4rem 0.6rem; letter-spacing: 0; }
+  .stage-swap::after { content: "⇆"; }
+  .stage-swap { font-size: 0; }
+  .stage-swap::after { font-size: 0.95rem; }
+}

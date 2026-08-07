@@ -61,6 +61,21 @@ const Stage = (() => {
     panes[1].root.style.flex = "1 1 auto";
   }
 
+  // Swap which side each view sits on. The first-pane fraction is inverted too,
+  // so each view keeps the width it had rather than inheriting the other's —
+  // otherwise "swap" would also resize both panes, which reads as a bug.
+  function swapPanes() {
+    if (panes.length !== 2) return;
+    const wrap = stageEl().querySelector(".stage-panes");
+    wrap.prepend(panes[1].root);
+    panes.reverse();
+    const a = splitAxis();
+    ratio[a] = clampRatio(1 - currentRatio(a));
+    saveRatio(a, ratio[a]);
+    syncDivider();
+    refreshNav();
+  }
+
   function clearSplit() {
     for (const p of panes) p.root.style.flex = "";
     if (divider) { divider.remove(); divider = null; }
@@ -165,6 +180,10 @@ const Stage = (() => {
       b.onclick = () => switchPrimary(v);
       nav.appendChild(b);
     }
+    const swapBtn = el("button", "stage-swap", "⇆ swap sides");
+    swapBtn.title = "Swap the two views (Alt+S)";
+    swapBtn.onclick = () => swapPanes();
+    bar.appendChild(swapBtn);
     const closeBtn = el("button", "stage-close", "✕ back to the desk");
     closeBtn.onclick = () => close();   // NB: must not shadow close() above
     bar.appendChild(nav);
@@ -175,6 +194,8 @@ const Stage = (() => {
   }
 
   function refreshNav() {
+    const sw = stageEl().querySelector(".stage-swap");
+    if (sw) sw.classList.toggle("hidden", panes.length !== 2);
     const active = panes.map(p => p.view);
     for (const b of stageEl().querySelectorAll(".stage-nav-btn"))
       b.classList.toggle("on", active.includes(b.dataset.view));
@@ -182,7 +203,7 @@ const Stage = (() => {
     syncDivider();
   }
 
-  function addPane(view) {
+  function addPane(view, { at } = {}) {
     const root = el("section", "pane pane-" + view);
     const head = el("header", "pane-head");
     head.appendChild(el("span", "pane-title", VIEW_NAMES[view]));
@@ -200,9 +221,12 @@ const Stage = (() => {
     const body = el("div", "pane-body");
     root.appendChild(head);
     root.appendChild(body);
-    stageEl().querySelector(".stage-panes").appendChild(root);
+    const wrap = stageEl().querySelector(".stage-panes");
+    // `at: 0` puts the new pane on the LEFT. syncDivider() re-seats the divider
+    // from panes[0], so DOM order and array order just have to agree.
+    if (at === 0) { wrap.prepend(root); } else { wrap.appendChild(root); }
     const pane = { view, root, body, restore: null };
-    panes.push(pane);
+    if (at === 0) panes.unshift(pane); else panes.push(pane);
     VIEWS[view](pane);
     refreshNav();
     return pane;
@@ -215,7 +239,7 @@ const Stage = (() => {
       if (v === "chat") continue; // chat docks via the Lineup Room
       if (panes.some(p => p.view === v)) continue;
       const b = el("button", null, VIEW_NAMES[v]);
-      b.onclick = () => { menu.remove(); openAsSplit(v); };
+      b.onclick = () => { menu.remove(); openAsSplit(v, root); };
       menu.appendChild(b);
     }
     root.querySelector(".pane-head").appendChild(menu);
@@ -223,10 +247,17 @@ const Stage = (() => {
     setTimeout(() => document.addEventListener("pointerdown", off), 0);
   }
 
-  function openAsSplit(view) {
+  // "Split" means: put this view NEXT TO the pane whose button I pressed. So
+  // the pane that gets replaced is the other one — previously this always
+  // replaced panes[1], which meant hitting split on the left pane swapped out
+  // the right-hand view instead of the one you were looking away from.
+  function openAsSplit(view, fromRoot) {
     if (panes.length >= 2) {
-      // replace the second pane
-      closePane(panes[1].view, { keepStage: true });
+      const fromIdx = panes.findIndex(p => p.root === fromRoot);
+      const targetIdx = fromIdx === -1 ? 1 : 1 - fromIdx;
+      closePane(panes[targetIdx].view, { keepStage: true });
+      addPane(view, { at: targetIdx });   // reopen in the slot we just vacated
+      return;
     }
     addPane(view);
   }
@@ -494,7 +525,14 @@ const Stage = (() => {
     evidence: viewEvidence
   };
 
-  return { open, close, isOpen, openChat: stageChat, appFullscreenSupported };
+  document.addEventListener("keydown", (e) => {
+    if (e.altKey && (e.key === "s" || e.key === "S") && opened && panes.length === 2) {
+      e.preventDefault();
+      swapPanes();
+    }
+  });
+
+  return { open, close, isOpen, openChat: stageChat, appFullscreenSupported, swapPanes };
 })();
 
 // ---------- app-level fullscreen toggle (topbar ⛶) ----------
