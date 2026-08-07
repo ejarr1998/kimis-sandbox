@@ -390,6 +390,10 @@ const Stage = (() => {
     }
     b.appendChild(doc);
     b.appendChild(strip);
+    // The desk report is annotatable but this reader is a fresh node, so it
+    // gets no pen from Annotate's auto-init. Same key as the desk panel, so
+    // marks made in either place show up in both.
+    if (typeof Annotate !== "undefined") pane.restore = Annotate.attachReport(doc);
   }
 
   // ---------- VIEW: lineup room ----------

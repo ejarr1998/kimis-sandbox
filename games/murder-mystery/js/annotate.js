@@ -388,6 +388,17 @@ const Annotate = (() => {
     mo.observe(container, { childList: true });
   }
 
+  // The Stage's fullscreen Case File builds a fresh reader node instead of
+  // adopting #opening-panel, so it needs attaching by hand. Using the SAME key
+  // as the desk panel means existing marks reappear there — strokes are stored
+  // normalized 0..1 against the target box, so they simply scale to the larger
+  // reader. Returns a cleanup for the caller to run when the pane closes.
+  function attachReport(el) {
+    if (!el) return () => {};
+    attach(el, "report:" + caseTag());
+    return () => detach(el);
+  }
+
   // ---------- auto-init ----------
 
   function init() {
@@ -404,6 +415,8 @@ const Annotate = (() => {
   return {
     attach,
     attachNotes,
+    attachReport,
+    detach,
     exit: exitMode,
     isActive: () => !!activeState,
     _states: states,   // exposed for debugging / tests
