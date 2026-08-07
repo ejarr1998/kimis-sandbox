@@ -77,10 +77,42 @@
 .split-menu button:hover { background: rgba(201,168,106,0.12); color: var(--brass); }
 .pane-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 
+/* ---------- split divider (drag handle between the two panes) ---------- */
+.stage-divider {
+  flex: 0 0 14px; /* generous hit area for touch */
+  align-self: stretch;
+  display: flex; align-items: center; justify-content: center;
+  background: #17130e; /* near-ink, flat, noir */
+  cursor: col-resize;
+  touch-action: none;
+  position: relative; z-index: 2;
+}
+.stage-divider:hover { background: #1f1a13; }
+.stage-divider.dragging { background: #262019; }
+.stage-divider-grip {
+  color: #7d6b45; /* desaturated brass */
+  font-size: 0.85rem; line-height: 1;
+  letter-spacing: 1px;
+  user-select: none; -webkit-user-select: none;
+  pointer-events: none;
+}
+.stage-divider:hover .stage-divider-grip,
+.stage-divider.dragging .stage-divider-grip { color: var(--brass); }
+
+/* suppress selection + force the resize cursor everywhere while dragging */
+body.split-dragging, body.split-dragging * {
+  user-select: none !important; -webkit-user-select: none !important;
+}
+body.split-dragging-h, body.split-dragging-h * { cursor: col-resize !important; }
+body.split-dragging-v, body.split-dragging-v * { cursor: row-resize !important; }
+
 /* portrait phones: panes stack 50/50 instead of cramming side by side */
 @media (max-width: 759px) and (orientation: portrait) {
   .stage-panes.split { flex-direction: column; }
   .stage-panes.split .pane { border-right: none; border-bottom: 1px solid var(--line); }
+  /* divider becomes a horizontal seam with a vertical drag */
+  .stage-panes.split .stage-divider { cursor: row-resize; }
+  .stage-panes.split .stage-divider-grip { transform: rotate(90deg); }
 }
 
 /* ---------- Case File Reader ---------- */

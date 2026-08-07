@@ -26,6 +26,116 @@ const Stage = (() => {
   let panes = [];          // [{ view, root, body, restore }] in display order
   let opened = false;
 
+  // ---------- split divider (drag to resize the two panes) ----------
+  const MIN_RATIO = 0.2;   // neither pane may go below 20%
+  let divider = null;
+  const ratio = { h: null, v: null }; // first-pane fraction per axis (null = not loaded)
+
+  // "h" = side-by-side (drag horizontally), "v" = stacked portrait (drag vertically)
+  function splitAxis() {
+    const w = stageEl().querySelector(".stage-panes");
+    return w && getComputedStyle(w).flexDirection === "column" ? "v" : "h";
+  }
+  const ratioKey = (a) => a === "v" ? "deadair_split_ratio_v" : "deadair_split_ratio_h";
+  const clampRatio = (r) => Math.min(1 - MIN_RATIO, Math.max(MIN_RATIO, r));
+  function loadRatio(a) {
+    try {
+      const x = parseFloat(localStorage.getItem(ratioKey(a)));
+      if (isFinite(x)) return clampRatio(x);
+    } catch (e) { /* storage may be unavailable */ }
+    return 0.5;
+  }
+  function currentRatio(a) {
+    if (ratio[a] == null) ratio[a] = loadRatio(a);
+    return ratio[a];
+  }
+  function saveRatio(a, r) {
+    try { localStorage.setItem(ratioKey(a), String(r)); } catch (e) {}
+  }
+
+  function applySplit() {
+    if (panes.length !== 2) return;
+    const r = clampRatio(currentRatio(splitAxis()));
+    panes[0].root.style.flex = "0 0 " + (r * 100).toFixed(3) + "%";
+    panes[1].root.style.flex = "1 1 auto";
+  }
+
+  function clearSplit() {
+    for (const p of panes) p.root.style.flex = "";
+    if (divider) { divider.remove(); divider = null; }
+  }
+
+  function makeDivider() {
+    const d = el("div", "stage-divider");
+    d.setAttribute("role", "separator");
+    d.title = "Drag to resize · double-click to reset";
+    d.appendChild(el("span", "stage-divider-grip", "⋮⋮"));
+
+    d.addEventListener("pointerdown", (e) => {
+      if (panes.length < 2) return;
+      e.preventDefault(); // no text selection / no scroll hijack while dragging
+      try { d.setPointerCapture(e.pointerId); } catch (err) {}
+      const a = splitAxis();
+      const rect = stageEl().querySelector(".stage-panes").getBoundingClientRect();
+      const size = a === "v" ? rect.height : rect.width;
+      const start = a === "v" ? rect.top : rect.left;
+      let moved = false;
+      d.classList.add("dragging");
+      document.body.classList.add("split-dragging", a === "v" ? "split-dragging-v" : "split-dragging-h");
+      const move = (ev) => {
+        const pos = a === "v" ? ev.clientY - start : ev.clientX - start;
+        ratio[a] = clampRatio(size ? pos / size : 0.5);
+        moved = true;
+        applySplit();
+      };
+      const up = () => {
+        d.removeEventListener("pointermove", move);
+        d.removeEventListener("pointerup", up);
+        d.removeEventListener("pointercancel", up);
+        d.classList.remove("dragging");
+        document.body.classList.remove("split-dragging", "split-dragging-v", "split-dragging-h");
+        saveRatio(a, ratio[a]);
+        // double-tap / double-click (pointer events) resets to 50/50
+        const now = Date.now();
+        if (!moved && now - (d._lastTap || 0) < 350) {
+          ratio[a] = 0.5;
+          saveRatio(a, 0.5);
+          applySplit();
+          d._lastTap = 0;
+        } else if (!moved) {
+          d._lastTap = now;
+        }
+      };
+      d.addEventListener("pointermove", move);
+      d.addEventListener("pointerup", up);
+      d.addEventListener("pointercancel", up);
+    });
+
+    d.addEventListener("dblclick", () => {
+      const a = splitAxis();
+      ratio[a] = 0.5;
+      saveRatio(a, 0.5);
+      applySplit();
+    });
+    return d;
+  }
+
+  // insert / remove the divider + re-apply the persisted ratio for this axis
+  function syncDivider() {
+    if (panes.length === 2) {
+      if (!divider || !divider.isConnected) divider = makeDivider();
+      panes[0].root.after(divider);
+      applySplit();
+    } else {
+      clearSplit();
+    }
+  }
+
+  // re-clamp on window resize / orientation change while split is open
+  window.addEventListener("resize", () => {
+    if (opened && panes.length === 2) syncDivider();
+  });
+
   const stageEl = () => $("stage");
 
   // ---------- fullscreen API (app-level) ----------
@@ -68,6 +178,7 @@ const Stage = (() => {
     for (const b of stageEl().querySelectorAll(".stage-nav-btn"))
       b.classList.toggle("on", active.includes(b.dataset.view));
     stageEl().querySelector(".stage-panes").classList.toggle("split", panes.length > 1);
+    syncDivider();
   }
 
   function addPane(view) {

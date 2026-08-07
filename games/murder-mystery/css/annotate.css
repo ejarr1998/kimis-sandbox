@@ -1,0 +1,72 @@
+/* ---------- Dead Air — detective annotations (red pen / highlighter) ---------- */
+
+/* targets whose computed position is static get this so the canvas can anchor */
+.anno-rel { position: relative; }
+
+/* drawing surface: exactly covers the target; inert unless annotation mode is on */
+.anno-canvas {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  z-index: 6;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.anno-canvas.on {
+  pointer-events: auto;
+  touch-action: none;      /* fingers draw instead of scrolling the page */
+  cursor: crosshair;
+}
+
+/* small ✎ affordance in the target's corner */
+.anno-edit {
+  position: absolute; top: 3px; right: 3px;
+  z-index: 7;
+  min-width: 30px; height: 30px;
+  padding: 0 6px;
+  border-radius: 3px;
+  background: rgba(22, 19, 15, 0.14);
+  color: #8a2f2b;
+  font-size: 0.9rem; line-height: 1;
+  opacity: 0.55;
+}
+.anno-edit:hover, .anno-edit:focus-visible { opacity: 1; background: rgba(138, 47, 43, 0.18); }
+.anno-edit.hidden { display: none; }
+
+/* floating toolbar (position: fixed, placed by JS above/below the target) */
+.anno-toolbar {
+  position: fixed; z-index: 1500;
+  display: flex; gap: 4px;
+  padding: 4px;
+  background: linear-gradient(170deg, #efe6d0, #ddd0b2);
+  border: 1px solid #b3a684;
+  border-radius: 4px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+  font-family: "Special Elite", monospace;
+}
+.anno-toolbar.hidden { display: none; }
+.anno-tool {
+  min-width: 36px; min-height: 36px;
+  padding: 0 8px;
+  border-radius: 3px;
+  background: transparent;
+  color: #2c2519;
+  font-size: 1rem; line-height: 1;
+  border: 1px solid transparent;
+}
+.anno-tool:hover, .anno-tool:focus-visible { background: rgba(138, 47, 43, 0.12); }
+.anno-tool.on {
+  border-color: #8a2f2b;
+  background: rgba(138, 47, 43, 0.16);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.anno-tool.anno-done { color: #fff; background: #8a2f2b; }
+.anno-tool.anno-done:hover { background: #6f2522; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .anno-toolbar { animation: anno-pop 0.18s ease-out; }
+  @keyframes anno-pop {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: none; }
+  }
+  .anno-edit { transition: opacity 0.15s ease, background 0.15s ease; }
+}

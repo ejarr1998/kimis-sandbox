@@ -9,6 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 <link rel="stylesheet" href="css/game.css">
 <link rel="stylesheet" href="css/stage.css">
+<link rel="stylesheet" href="css/annotate.css">
 </head>
 <body>
 
@@ -54,7 +55,16 @@
       </div>
     </div>
 
-    <!-- 3 · corkboard -->
+    <!-- 3 · board of suspicion -->
+    <div class="zone zone-ranking" data-tab="ranking">
+      <div class="panel" id="ranking-panel">
+        <div class="panel-title">The Board of Suspicion <span class="right">rank them — your call, detective</span></div>
+        <div id="ranking"></div>
+        <div class="ranking-foot">No one sees this board but you.</div>
+      </div>
+    </div>
+
+    <!-- 4 · corkboard -->
     <div class="zone zone-board" data-tab="board">
       <div class="panel cork">
         <div class="panel-title">The Corkboard <span class="right">drag the notes · red string links a source</span></div>
@@ -66,12 +76,13 @@
         <div class="cork-tools">
           <button class="ghost" id="organize-btn" onclick="organizeNotes()">🧠 type up my notes (AI summary)</button>
           <button class="ghost" id="arrange-btn" onclick="autoArrange()">🧹 auto-arrange</button>
+          <button class="ghost" id="archived-btn" onclick="toggleArchiveDrawer()" disabled>🗃 archived (0)</button>
           <span id="organize-status"></span>
         </div>
       </div>
     </div>
 
-    <!-- 4 · evidence envelope -->
+    <!-- 5 · evidence envelope -->
     <div class="zone zone-evidence" data-tab="evidence">
       <div class="panel" id="evidence-panel">
         <div class="panel-title">Evidence Envelope <span class="right">tap the envelope · tap a tag to hold it to the lamp</span></div>
@@ -89,6 +100,7 @@
   <div id="tabbar" role="tablist">
     <button data-tab="file" class="on" onclick="showTab('file')">📁 File</button>
     <button data-tab="suspects" onclick="showTab('suspects')">🕵 Suspects</button>
+    <button data-tab="ranking" onclick="showTab('ranking')">⚖ Ranking</button>
     <button data-tab="board" onclick="showTab('board')">📌 Board</button>
     <button data-tab="evidence" onclick="showTab('evidence')">🏷 Evidence</button>
   </div>
@@ -155,11 +167,11 @@
           </div>
           <div class="charge">
             <label class="lab" for="pick-weapon">with the instrument</label>
-            <select id="pick-weapon"></select>
+            <input id="pick-weapon" type="text" placeholder="name the weapon…" autocomplete="off" maxlength="80" spellcheck="false">
           </div>
           <div class="charge">
             <label class="lab" for="pick-location">at the place known as</label>
-            <select id="pick-location"></select>
+            <input id="pick-location" type="text" placeholder="name the place…" autocomplete="off" maxlength="80" spellcheck="false">
           </div>
           <div class="warrant-warning">⚠ A signed warrant is final. It cannot be amended, withdrawn, or taken back.</div>
           <div class="warrant-sign">
@@ -204,12 +216,23 @@
     </div>
   </div>
 
+  <!-- archived notes drawer: fixed overlay so it also opens over the Stage war room -->
+  <div id="archive-drawer" class="hidden" role="dialog" aria-label="Archived notes">
+    <div class="ad-head">
+      <span class="ad-title">🗃 Archived notes</span>
+      <button class="ghost" id="archive-restore-all" onclick="restoreAllArchived()">restore all</button>
+      <button class="ghost" onclick="toggleArchiveDrawer(false)" aria-label="Close archive drawer">✕</button>
+    </div>
+    <div id="archive-list"></div>
+  </div>
+
   <!-- fullscreen stage: purpose-built views + split screen (built by js/stage.js) -->
   <div id="stage" class="hidden" aria-hidden="true"></div>
 
 <script src="../../shared/api.js"></script>
 <script src="case-engine.js"></script>
 <script src="js/game.js"></script>
+<script src="js/annotate.js"></script>
 <script src="js/stage.js"></script>
 </body>
 </html>
