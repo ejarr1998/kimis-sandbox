@@ -337,3 +337,12 @@ body.split-dragging-v, body.split-dragging-v * { cursor: row-resize !important; 
   .stage-swap { font-size: 0; }
   .stage-swap::after { font-size: 0.95rem; }
 }
+
+/* ---------- chat pane: back to the lineup ----------
+   The chat pane carries three tools where others carry two, so on narrow
+   screens the label collapses to the arrow rather than wrapping the header. */
+.pane-chat .pane-tools { flex-wrap: nowrap; min-width: 0; }
+@media (max-width: 700px) {
+  .pane-chat .pane-tool:first-child { font-size: 0; padding: 0.25rem 0.45rem; }
+  .pane-chat .pane-tool:first-child::after { content: "← 👥"; font-size: 0.72rem; }
+}

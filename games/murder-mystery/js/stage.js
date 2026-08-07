@@ -208,6 +208,14 @@ const Stage = (() => {
     const head = el("header", "pane-head");
     head.appendChild(el("span", "pane-title", VIEW_NAMES[view]));
     const tools = el("span", "pane-tools");
+    // The chat pane is the one view you can't reach from the top nav, so it
+    // needs its own way back to the suspect list.
+    if (view === "chat") {
+      const backBtn = el("button", "pane-tool", "← all suspects");
+      backBtn.title = "Close this interview and show the lineup";
+      backBtn.onclick = () => backToLineup();
+      tools.appendChild(backBtn);
+    }
     // split menu: dock any other view beside this one
     const splitBtn = el("button", "pane-tool", "⇄ split");
     splitBtn.title = "Open another view beside this one";
@@ -230,6 +238,17 @@ const Stage = (() => {
     VIEWS[view](pane);
     refreshNav();
     return pane;
+  }
+
+  // Leave the interview and show the lineup. If the Lineup Room is already
+  // docked alongside, closing the chat simply hands it the full width;
+  // otherwise the chat's own slot becomes the lineup.
+  function backToLineup() {
+    const chatIdx = panes.findIndex(p => p.view === "chat");
+    if (chatIdx === -1) return;
+    const hasLineup = panes.some(p => p.view === "suspects");
+    closePane("chat", { keepStage: true });
+    if (!hasLineup) addPane("suspects", { at: chatIdx });
   }
 
   function showSplitMenu(root) {
@@ -266,9 +285,16 @@ const Stage = (() => {
     if (panes.some(p => p.view === view)) return; // already open — nav just reflects it
     if (panes.length === 0) { open(view); return; }
     const keep = panes.length > 1 ? panes[1].view : null;
+    // afterChatUndock() clears currentSuspect, so a chat pane that survives a
+    // nav switch would come back blank and unable to send. Hold the suspect
+    // across the teardown and re-populate.
+    const keepSuspect = keep === "chat" ? currentSuspect : null;
     while (panes.length) closePane(panes[0].view, { keepStage: true }); // restores adopted DOM
     addPane(view);
-    if (keep && keep !== view) addPane(keep);
+    if (keep && keep !== view) {
+      addPane(keep);
+      if (keepSuspect) populateChat(keepSuspect);
+    }
   }
 
   function closePane(view, { keepStage = false } = {}) {
@@ -409,7 +435,13 @@ const Stage = (() => {
   function stageChat(s) {
     const existing = panes.find(p => p.view === "chat");
     if (!existing) {
-      if (panes.length >= 2) closePane(panes[panes.length - 1].view, { keepStage: true });
+      if (panes.length >= 2) {
+        // Close anything EXCEPT the Lineup Room. Blindly closing the last pane
+        // evicted the suspect list you just clicked from whenever it happened
+        // to be on the right, leaving no way back to it.
+        const victim = panes.find(p => p.view !== "suspects") || panes[panes.length - 1];
+        closePane(victim.view, { keepStage: true });
+      }
       addPane("chat");
     }
     populateChat(s);
