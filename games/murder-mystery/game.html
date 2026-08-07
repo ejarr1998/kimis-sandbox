@@ -940,6 +940,7 @@
   const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const gsapOK = () => !!(window.gsap) && !reducedMotion();
   const touchOnly = () => window.matchMedia("(hover: none)").matches;
+  const desktop = () => window.matchMedia("(min-width: 760px)").matches;
 
   function shuffle(arr) {
     const a = [...arr];
@@ -1080,6 +1081,7 @@
   }
   function expandZone(zone) {
     if (!zone) return;
+    if (!desktop()) return; // focus mode is desktop-only; mobile zones are full-screen tabs
     if (focusedZone === zone) { collapseZone(); return; }
     if (focusedZone) focusedZone.classList.remove("focused"); // one at a time
     focusedZone = zone;
@@ -1096,7 +1098,7 @@
     }
     if (gsapOK()) {
       window.gsap.fromTo(zone, { opacity: 0, y: 26 },
-        { opacity: 1, y: 0, duration: 0.32, ease: "power3.out", clearProps: "opacity" });
+        { opacity: 1, y: 0, duration: 0.32, ease: "power3.out", clearProps: "opacity,transform" });
     }
     if (zone.classList.contains("zone-board"))
       requestAnimationFrame(() => requestAnimationFrame(drawStrings));
@@ -1127,6 +1129,7 @@
       btn.addEventListener("click", (e) => { e.stopPropagation(); expandZone(zone); });
       title.appendChild(btn);
       title.addEventListener("click", (e) => {
+        if (!desktop()) return; // no title-tap focus on mobile; tabs own the layout
         if (e.target.closest("button, a, input, select, textarea")) return;
         if (zone.classList.contains("focused")) return;
         expandZone(zone);
