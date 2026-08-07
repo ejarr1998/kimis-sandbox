@@ -236,7 +236,7 @@ Rules: use fixes[] for name/consistency/portrait/wording repairs (max 6), patche
     let lastError = null;
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const raw = await SandboxAPI.claude(GEN_PROMPT(setting, !!custom), { maxTokens: 7000 });
+        const raw = await SandboxAPI.claude(GEN_PROMPT(setting, !!custom), { maxTokens: 16000 });
         const caseFile = extractJson(raw);
         caseFile.requestedSetting = custom || null;
         (caseFile.suspects || []).forEach(s => { s.portrait = null; });
@@ -323,7 +323,7 @@ Rules: use fixes[] for name/consistency/portrait/wording repairs (max 6), patche
     // the thrown error as fatal and surfaces its message to the host.
     for (let attempt = 1; attempt <= 3; attempt++) {
       onStatus?.(`🔍 Case audit (pass ${attempt})…`);
-      const raw = await SandboxAPI.claude(VALIDATE_PROMPT(caseFile), { maxTokens: 2000 });
+      const raw = await SandboxAPI.claude(VALIDATE_PROMPT(caseFile), { maxTokens: 4000 });
       const verdict = extractJson(raw);
       const fixes = verdict.fixes || [];
       if (verdict.solvable && verdict.consistent !== false && fixes.length === 0) {

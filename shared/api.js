@@ -32,7 +32,13 @@ const SandboxAPI = (() => {
   // NOTE: Anthropic blocks direct browser calls by default (CORS).
   // We pass the 'anthropic-dangerous-direct-browser-access' header which
   // Anthropic supports for exactly this kind of client-side playground use.
-  async function claude(prompt, { model = "claude-sonnet-5", system = "", maxTokens = 1024 } = {}) {
+  // Claude Sonnet 5 (and later) have "adaptive thinking" ON by default, and
+  // thinking tokens count against max_tokens. With thinking left on, a large
+  // generation request can spend the whole token budget on hidden reasoning
+  // and return ZERO text — which callers then report as "AI did not return
+  // JSON". So we disable thinking by default here; callers that want it can
+  // pass { thinking: { type: "adaptive", display: "summarized" } }.
+  async function claude(prompt, { model = "claude-sonnet-5", system = "", maxTokens = 1024, thinking = null } = {}) {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -44,13 +50,20 @@ const SandboxAPI = (() => {
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
+        thinking: thinking || { type: "disabled" },
         ...(system ? { system } : {}),
         messages: [{ role: "user", content: prompt }]
       })
     });
     if (!res.ok) throw new Error("Claude error " + res.status + ": " + await res.text());
     const data = await res.json();
-    return data.content.map(b => b.text || "").join("");
+    // Only keep text blocks (thinking/redacted_thinking blocks carry no .text).
+    const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+    if (!text && data.stop_reason === "max_tokens")
+      throw new Error(`Claude used all ${maxTokens} tokens before writing any reply (increase maxTokens)`);
+    if (data.stop_reason === "max_tokens")
+      throw new Error(`Claude reply was cut off at the ${maxTokens}-token limit (increase maxTokens)`);
+    return text;
   }
 
   // ---------- Grok text (xAI) ----------
