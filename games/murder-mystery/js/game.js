@@ -154,81 +154,33 @@
       document.body.classList.remove("room-open");
   }
 
-  // ---------- zone focus (hover zoom is CSS; this is fullscreen focus mode) ----------
-  let focusedZone = null;
-  function zoneBackdrop() {
-    let bd = $("zone-backdrop");
-    if (!bd) {
-      bd = document.createElement("div");
-      bd.id = "zone-backdrop";
-      bd.addEventListener("click", collapseZone);
-      document.body.appendChild(bd);
-    }
-    return bd;
-  }
-  function expandZone(zone) {
-    if (!zone) return;
-    if (!desktop()) return; // focus mode is desktop-only; mobile zones are full-screen tabs
-    if (focusedZone === zone) { collapseZone(); return; }
-    if (focusedZone) focusedZone.classList.remove("focused"); // one at a time
-    focusedZone = zone;
-    zone.classList.add("focused");
-    zoneBackdrop().classList.add("on");
-    document.body.style.overflow = "hidden";
-    const panel = zone.querySelector(":scope > .panel");
-    if (panel && !panel.querySelector(":scope > .zone-back-btn")) {
-      const back = el("button", "zone-back-btn", "✕ back to the desk");
-      back.type = "button";
-      back.setAttribute("aria-label", "Back to the desk");
-      back.addEventListener("click", (e) => { e.stopPropagation(); collapseZone(); });
-      panel.appendChild(back);
-    }
-    if (gsapOK()) {
-      window.gsap.fromTo(zone, { opacity: 0, y: 26 },
-        { opacity: 1, y: 0, duration: 0.32, ease: "power3.out", clearProps: "opacity,transform" });
-    }
-    if (zone.classList.contains("zone-board"))
-      requestAnimationFrame(() => requestAnimationFrame(drawStrings));
-  }
-  function collapseZone() {
-    if (!focusedZone) return;
-    const wasBoard = focusedZone.classList.contains("zone-board");
-    focusedZone.classList.remove("focused");
-    focusedZone = null;
-    const bd = $("zone-backdrop");
-    if (bd) bd.classList.remove("on");
-    document.body.style.overflow = "";
-    if (wasBoard)
-      requestAnimationFrame(() => requestAnimationFrame(drawStrings));
-  }
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    if (focusedZone) collapseZone();
-    else if (!$("reveal-overlay").classList.contains("hidden")) closeReveal();
-  });
-  // ⤢ button in each zone header + click-to-expand on the title bar itself.
-  // Expansion is bound to the header only, so dragging notes etc. can't trigger it.
+  // ---------- zone enlargement → fullscreen stage (js/stage.js) ----------
+  // The old "inflate the panel" focus mode is gone: the ⤢ button now opens a
+  // purpose-built fullscreen view on the Stage. Title-click still opens it too.
   function initZoneFocus() {
     for (const zone of document.querySelectorAll("#game .zone")) {
       const title = zone.querySelector(":scope > .panel > .panel-title");
       if (!title) continue;
+      const view = zone.dataset.tab; // file | suspects | board | evidence
       const btn = el("button", "expand-btn", "⤢");
       btn.type = "button";
-      btn.setAttribute("aria-label", "Expand");
-      btn.addEventListener("click", (e) => { e.stopPropagation(); expandZone(zone); });
+      btn.setAttribute("aria-label", "Open " + view + " fullscreen");
+      btn.addEventListener("click", (e) => { e.stopPropagation(); Stage.open(view); });
       title.appendChild(btn);
       title.addEventListener("click", (e) => {
-        if (!desktop()) return; // no title-tap focus on mobile; tabs own the layout
         if (e.target.closest("button, a, input, select, textarea")) return;
-        if (zone.classList.contains("focused")) return;
-        expandZone(zone);
+        Stage.open(view);
       });
     }
   }
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (typeof Stage !== "undefined" && Stage.isOpen()) return; // stage handles its own Escape
+    if (!$("reveal-overlay").classList.contains("hidden")) closeReveal();
+  });
 
   // ---------- mobile tabs ----------
   function showTab(name) {
-    collapseZone(); // tabs own the layout on mobile; never leave a zone stuck focused
     for (const z of document.querySelectorAll("#game .zone"))
       z.classList.toggle("active", z.dataset.tab === name);
     for (const b of document.querySelectorAll("#tabbar button"))
@@ -451,8 +403,8 @@
     };
   }
 
-  // rendered note width in px — mirrors the CSS width: min(168px, 42vw)
-  function noteWidthPx() { return Math.min(168, window.innerWidth * 0.42); }
+  // rendered note width in px — NOTE_W is the war-room override (js/stage.js)
+  function noteWidthPx() { return window.NOTE_W || Math.min(168, window.innerWidth * 0.42); }
 
   // clamp a note position (% of field) so the whole note stays inside the field;
   // no-op while the field is hidden (0 size, e.g. an inactive mobile tab)
@@ -753,7 +705,7 @@ Max 250 words total. Be specific with names, never say "the suspect".`,
   }
 
   // ---------- interrogation ----------
-  function openChat(s) {
+  function populateChat(s) {
     currentSuspect = s;
     $("chat-who").textContent = s.name;
     $("chat-role").textContent = s.role;
@@ -770,6 +722,10 @@ Max 250 words total. Be specific with names, never say "the suspect".`,
       cn.classList.add("hidden");
     }
     renderChat(false);
+  }
+  function openChat(s) {
+    if (typeof Stage !== "undefined" && Stage.isOpen()) { Stage.openChat(s); return; }
+    populateChat(s);
     openOverlay("chat-overlay");
     sfx("door");
     setTimeout(() => $("question").focus(), 80);
