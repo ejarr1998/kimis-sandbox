@@ -243,26 +243,6 @@
       rankings = me.rankings || {};
       accused = me.accusation; notesSummary = me.notesSummary || "";
       lastClueCount = myClues.length;
-
-      // ---- buddy cop ----
-      // Coop.init is a no-op unless the case was created in coop mode, so solo
-      // cases fall straight through to the original single-player behaviour.
-      if (await Coop.init({ code: CODE, detective: DETECTIVE, mode: CASE.mode })) {
-        document.body.classList.add("coop");
-        // One board for everyone: the shared doc becomes the source of truth
-        // for clues, replacing the per-player array.
-        Coop.watchClues((shared) => {
-          myClues = shared;
-          renderClues(); renderSuspects();
-        });
-        Coop.watchPresence(renderPresence);
-        // A sealed joint warrant is the case's verdict for everyone, so pick it
-        // up on load even if this browser wasn't open when it was signed.
-        Coop.watchWarrant((w) => {
-          if (w.sealed && w.verdict && !accused) applySealedWarrant(w);
-        });
-      }
-
       renderAll();
       $("status").classList.add("hidden");
       $("game").classList.remove("hidden");
@@ -322,9 +302,16 @@
   }
 
   // ---------- board of suspicion (private suspect ranking) ----------
-  const RANK_PRESETS = [
-    ["Cleared", 0], ["Ruled out", 5], ["Person of interest", 50], ["Prime suspect", 90]
+  // verdict bands span the whole 0-100 scale — wherever the slider lands,
+  // exactly one band applies; tapping a chip snaps the slider into its band
+  const RANK_BANDS = [
+    { label: "Cleared", min: 0, max: 9, set: 0 },
+    { label: "Ruled out", min: 10, max: 29, set: 15 },
+    { label: "Person of interest", min: 30, max: 69, set: 50 },
+    { label: "Prime suspect", min: 70, max: 100, set: 85 }
   ];
+  const rankBand = (v) =>
+    RANK_BANDS.find(b => v >= b.min && v <= b.max) || RANK_BANDS[RANK_BANDS.length - 1];
   const rankOf = (id) => rankings[id] !== undefined ? rankings[id] : 10;
   // noir heat ramp: muted sepia (cool) → brass → deep red (prime suspect)
   function rankColor(v) {
@@ -350,10 +337,15 @@
       who.appendChild(el("div", "nm", s.name));
       who.appendChild(el("div", "rl", s.role));
       head.appendChild(who);
+      const meterBox = el("div", "rank-meterbox");
       const meter = el("div", "rank-meter");
       meter.textContent = v;
       meter.style.color = rankColor(v);
-      head.appendChild(meter);
+      const tag = el("div", "rank-tag", rankBand(v).label);
+      tag.style.color = rankColor(v);
+      meterBox.appendChild(meter);
+      meterBox.appendChild(tag);
+      head.appendChild(meterBox);
       row.appendChild(head);
 
       const facts = el("div", "rank-facts");
@@ -375,9 +367,12 @@
       const paint = (val) => { // live feedback while dragging, no re-sort
         meter.textContent = val;
         meter.style.color = rankColor(val);
+        tag.textContent = rankBand(val).label;
+        tag.style.color = rankColor(val);
         slider.style.accentColor = rankColor(val);
+        const band = rankBand(val).label;
         [...chips.children].forEach(c =>
-          c.classList.toggle("on", Math.abs(val - +c.dataset.val) <= 5));
+          c.classList.toggle("on", c.dataset.label === band));
       };
       slider.addEventListener("input", () => paint(+slider.value));
       slider.addEventListener("change", () => {
@@ -387,12 +382,14 @@
       });
       row.appendChild(slider);
 
-      for (const [label, pv] of RANK_PRESETS) {
-        const chip = el("button", "rank-chip" + (Math.abs(v - pv) <= 5 ? " on" : ""), label);
+      const currentBand = rankBand(v).label;
+      for (const band of RANK_BANDS) {
+        const chip = el("button", "rank-chip" + (currentBand === band.label ? " on" : ""), band.label);
         chip.type = "button";
-        chip.dataset.val = pv;
+        chip.dataset.label = band.label;
+        chip.title = `${band.label} — ${band.min}–${band.max}`;
         chip.onclick = () => {
-          rankings[s.id] = pv;
+          rankings[s.id] = band.set;
           sfx("paper", 0.3);
           persist().catch(() => {});
           renderRanking();
@@ -937,7 +934,6 @@ Max 250 words total. Be specific with names, never say "the suspect".`,
       cn.classList.add("hidden");
     }
     renderChat(false);
-    if (Coop.isActive()) joinRoom(s);
   }
   function openChat(s) {
     if (typeof Stage !== "undefined" && Stage.isOpen()) { Stage.openChat(s); return; }
@@ -946,127 +942,7 @@ Max 250 words total. Be specific with names, never say "the suspect".`,
     sfx("door");
     setTimeout(() => $("question").focus(), 80);
   }
-  function closeChat() {
-    leaveRoom();
-    closeOverlay("chat-overlay");
-    currentSuspect = null;
-  }
-
-  /* ---------- buddy cop: shared interrogation room ---------- */
-  let roomUnsub = null, seenMsgCount = 0, floorTimer = null, typingIdle = null;
-
-  function renderPresence(names) {
-    const bar = $("coop-bar");
-    if (!bar) return;
-    const others = names.filter(n => n !== DETECTIVE);
-    bar.textContent = "";
-    if (!others.length) { bar.append("working alone"); return; }
-    bar.appendChild(el("span", "dot"));
-    bar.append(others.join(", ") + (others.length === 1 ? " is on the case" : " are on the case"));
-  }
-
-  function joinRoom(s) {
-    leaveRoom();
-    seenMsgCount = (chats[s.id] || []).length;
-    roomUnsub = Coop.watchRoom(s.id,
-      (msgs) => {
-        if (!currentSuspect || currentSuspect.id !== s.id) return;
-        chats[s.id] = msgs;
-        // Type out only a genuinely new reply, so a listener firing for an
-        // unrelated reason doesn't replay the whole transcript.
-        const grew = msgs.length > seenMsgCount;
-        const lastIsReply = msgs.length && msgs[msgs.length - 1].role === "assistant";
-        seenMsgCount = msgs.length;
-        renderChat(grew && lastIsReply);
-      },
-      (floor) => {
-        if (!currentSuspect || currentSuspect.id !== s.id) return;
-        renderFloor(floor);
-      });
-  }
-
-  function leaveRoom() {
-    if (roomUnsub) { roomUnsub(); roomUnsub = null; }
-    clearInterval(floorTimer); floorTimer = null;
-    clearTimeout(typingIdle); typingIdle = null;
-    if (Coop.isActive() && Coop.heldSuspect()) Coop.releaseFloor();
-  }
-
-  // Reflects the floor into the chat bar. The waiting detective still sees the
-  // whole conversation live — they just can't send.
-  function renderFloor(floor) {
-    const notice = $("floor-notice"), bar = $("chatbar");
-    if (!notice || !bar) return;
-    clearInterval(floorTimer); floorTimer = null;
-
-    if (floor.free || floor.mine) {
-      notice.classList.remove("show");
-      bar.classList.remove("locked");
-      // Careful: while WE are generating, the floor reads as "mine". Leave the
-      // button disabled or the asker can fire a second question into a call
-      // that hasn't landed yet.
-      $("ask-btn").disabled = !!(floor.mine && floor.generating);
-      $("coop-typing").textContent = "";
-      return;
-    }
-
-    bar.classList.add("locked");
-    $("ask-btn").disabled = true;
-    notice.classList.add("show");
-
-    const paint = () => {
-      notice.textContent = "";
-      const who = el("b", null, floor.by);
-      notice.append(who);
-      if (floor.generating) {
-        notice.append(" is waiting on " + currentSuspect.name + "'s answer.");
-      } else {
-        notice.append(" has the floor.");
-        const left = Math.ceil((floor.expiresIn - (Date.now() - t0)) / 1000);
-        if (left > 0 && left <= 25) {
-          notice.append(" ");
-          notice.appendChild(el("span", "countdown", `opens in ${left}s`));
-        }
-      }
-    };
-    const t0 = Date.now();
-    paint();
-    if (!floor.generating) floorTimer = setInterval(paint, 1000);
-
-    // typing indicator
-    const t = $("coop-typing");
-    t.textContent = "";
-    if (floor.typing) {
-      t.append(floor.by + " is typing");
-      t.appendChild(el("span", "ell"));
-    } else if (floor.generating) {
-      t.append(currentSuspect.name + " is thinking");
-      t.appendChild(el("span", "ell"));
-    }
-  }
-
-  // Claim on first keystroke so a partner learns immediately, not after they've
-  // composed a paragraph. Idempotent: re-claiming a floor we hold is a no-op.
-  async function onQuestionInput() {
-    if (!Coop.isActive() || !currentSuspect) return;
-    const sid = currentSuspect.id;
-    const val = $("question").value;
-    if (!val) {
-      clearTimeout(typingIdle);
-      if (Coop.heldSuspect() === sid) Coop.setTyping(sid, false);
-      return;
-    }
-    if (Coop.heldSuspect() !== sid) {
-      const got = await Coop.claimFloor(sid);
-      if (!got) { $("question").value = ""; return; }
-    } else {
-      Coop.setTyping(sid, true);
-    }
-    // stop advertising "typing" shortly after they stop, which shortens the
-    // grace period from 15s to the 25s idle window
-    clearTimeout(typingIdle);
-    typingIdle = setTimeout(() => Coop.setTyping(sid, false), 4000);
-  }
+  function closeChat() { closeOverlay("chat-overlay"); currentSuspect = null; }
   function toggleChatNotes() {
     const body = $("chat-notes-body");
     const collapsed = body.classList.toggle("hidden");
@@ -1077,19 +953,7 @@ Max 250 words total. Be specific with names, never say "the suspect".`,
     const log = chats[currentSuspect.id] || [];
     $("chatlog").innerHTML = log.map(m =>
       `<div class="bubble ${m.role === "user" ? "me" : "them"}"></div>`).join("");
-    [...$("chatlog").children].forEach((b, i) => {
-      const m = log[i];
-      // In coop, label who asked — otherwise the transcript is unreadable.
-      // Questions from the other detective get a muted variant so your own
-      // still stand out.
-      if (Coop.isActive() && m.role === "user" && m.by) {
-        if (m.by !== DETECTIVE) b.classList.add("theirs");
-        b.appendChild(el("span", "by", m.by));
-        b.appendChild(document.createTextNode(m.text));
-      } else {
-        b.textContent = m.text;
-      }
-    });
+    [...$("chatlog").children].forEach((b, i) => b.textContent = log[i].text);
     $("chatlog").scrollTop = $("chatlog").scrollHeight;
     // the newest reply types itself out
     if (typeLast && log.length && log[log.length - 1].role === "assistant") {
@@ -1143,7 +1007,6 @@ HARD RULES:
   async function ask() {
     const q = $("question").value.trim();
     if (!q || !currentSuspect) return;
-    if (Coop.isActive()) return askShared(q);
     $("question").value = "";
     const sid = currentSuspect.id;
     chats[sid] = chats[sid] || [];
@@ -1169,44 +1032,6 @@ HARD RULES:
     askBtn.disabled = false;
   }
 
-  // Coop ask: the question hits Firestore BEFORE Claude is called, so the other
-  // detective sees it land immediately rather than after the reply arrives.
-  // Both clients then render from the snapshot listener, so neither can drift.
-  async function askShared(q) {
-    const s = currentSuspect, sid = s.id;
-    if (Coop.heldSuspect() !== sid) {
-      const got = await Coop.claimFloor(sid);
-      if (!got) return; // someone beat us to it; the floor notice explains
-    }
-    $("question").value = "";
-    const askBtn = $("ask-btn");
-    askBtn.disabled = true;
-    clearTimeout(typingIdle);
-
-    try {
-      await Coop.postMessage(sid, { role: "user", text: q });
-      await Coop.setGenerating(sid, true);
-      $("typing").textContent = s.name + " is thinking…";
-
-      const log = chats[sid] || [];
-      const history = log.slice(-20)
-        .map(m => `${m.role === "user" ? "Detective " + (m.by || "") : s.name}: ${m.text}`)
-        .join("\n");
-      const rawReply = await SandboxAPI.claude(history, { system: suspectPrompt(s), maxTokens: 250 });
-      const reply = cleanReply(rawReply, s.name) || "…";
-
-      await Coop.postMessage(sid, { role: "assistant", text: reply });
-      $("typing").textContent = "";
-      await Coop.setGenerating(sid, false);
-      await extractClues(s.name, q, reply);
-    } catch (e) {
-      $("typing").textContent = "❌ " + e.message;
-      // Always drop `generating`, or the room stays frozen for two minutes.
-      try { await Coop.setGenerating(sid, false); } catch (_) {}
-    }
-    askBtn.disabled = false;
-  }
-
   async function extractClues(suspectName, question, answer) {
     try {
       const known = myClues.map(clueText);
@@ -1219,29 +1044,17 @@ HARD RULES:
       const found = JSON.parse((raw.match(/\{[\s\S]*\}/) || ["{}"])[0]).clues || [];
       const fresh = found.filter(c => c && !known.some(k => overlap(k, c)));
       if (fresh.length) {
-        const notes = fresh.map(text => ({ text, from: suspectName, at: new Date().toISOString() }));
-        if (Coop.isActive()) {
-          // arrayUnion so two detectives pinning at once merge instead of
-          // clobbering; the listener repaints both boards.
-          await Coop.addClues(notes);
-          sfx("pin");
-        } else {
-          myClues.push(...notes);
-          renderClues(); renderSuspects();
-          sfx("pin");
-          await persist();
-        }
+        myClues.push(...fresh.map(text => ({ text, from: suspectName, at: new Date().toISOString() })));
+        renderClues(); renderSuspects();
+        sfx("pin");
+        await persist();
       }
     } catch (e) { /* clue extraction is best-effort */ }
   }
 
   async function persist() {
-    const doc = { examined, accusation: accused, notesSummary,
-      hiddenClues, rankings, lastActive: new Date().toISOString() };
-    // In coop the clue board and transcripts are shared documents; writing them
-    // back per-player would fight the listener and resurrect deleted clues.
-    if (!Coop.isActive()) { doc.clues = myClues; doc.chats = chats; }
-    await playerRef.set(doc, { merge: true });
+    await playerRef.set({ clues: myClues, chats, examined, accusation: accused, notesSummary,
+      hiddenClues, rankings, lastActive: new Date().toISOString() }, { merge: true });
   }
 
   // ---------- narration ----------
@@ -1326,13 +1139,7 @@ HARD RULES:
 
   // ---------- accusation ----------
   function updateSealState() {
-    const complete = !!(pickedKiller && $("pick-weapon").value.trim() && $("pick-location").value.trim());
-    // In coop the button doubles as "withdraw my signature", so it must stay
-    // live once signed even while the charge is being reworked.
-    if (Coop.isActive() && $("seal-btn").classList.contains("signed")) {
-      $("seal-btn").disabled = false; return;
-    }
-    $("seal-btn").disabled = !complete;
+    $("seal-btn").disabled = !(pickedKiller && $("pick-weapon").value.trim() && $("pick-location").value.trim());
   }
 
   function renderLineup() {
@@ -1346,7 +1153,6 @@ HARD RULES:
       mug.appendChild(el("div", "mn", s.name));
       mug.appendChild(el("div", "accused-stamp", "Accused"));
       mug.tabIndex = 0;
-      mug.dataset.sid = s.id;
       mug.setAttribute("role", "radio");
       mug.setAttribute("aria-checked", "false");
       mug.setAttribute("aria-label", "Accuse " + s.name);
@@ -1360,9 +1166,6 @@ HARD RULES:
         });
         sfx("stamp");
         updateSealState();
-        // In coop this is a shared document: naming a different suspect voids
-        // any signature already on the warrant.
-        if (Coop.isActive()) Coop.updateWarrant({ killerId: s.id, killerName: s.name });
       };
       mug.onclick = pick;
       mug.onkeydown = (e) => {
@@ -1380,7 +1183,7 @@ HARD RULES:
     for (const id of ["pick-weapon", "pick-location"]) {
       const inp = $(id);
       inp.value = "";
-      inp.oninput = () => { updateSealState(); if (Coop.isActive()) pushWarrantField(id); };
+      inp.oninput = updateSealState;
     }
     $("seal-btn").innerHTML = "Press<br>the<br>Seal";
     updateSealState();
@@ -1389,7 +1192,6 @@ HARD RULES:
     $("w-victim").textContent = CASE.victim.name;
     $("w-detective").textContent = DETECTIVE;
     $("w-date").textContent = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
-    if (Coop.isActive()) startJointWarrant();
     openOverlay("accuse-overlay");
   }
   function hideAccuse() { closeOverlay("accuse-overlay"); }
@@ -1427,150 +1229,7 @@ HARD RULES:
     }
   }
 
-  /* ---------- buddy cop: the joint warrant ----------
-     Both detectives sign one warrant. Signatures are bound to the exact charge
-     they were given for, so changing the killer, weapon or place silently voids
-     every signature already on the page. You cannot be signed onto a charge you
-     never agreed to. */
-  let warrantUnsub = null, warrantPush = null, lastCharge = null;
-
-  function startJointWarrant() {
-    if (warrantUnsub) warrantUnsub();
-    lastCharge = null;
-    $("joint-sig").classList.remove("hidden");
-    warrantUnsub = Coop.watchWarrant(renderJointWarrant);
-  }
-
-  // Debounced so a typed word is a handful of writes, not one per character.
-  function pushWarrantField(id) {
-    clearTimeout(warrantPush);
-    warrantPush = setTimeout(() => {
-      Coop.updateWarrant(id === "pick-weapon"
-        ? { weapon: $("pick-weapon").value }
-        : { location: $("pick-location").value });
-    }, 400);
-  }
-
-  function renderJointWarrant(w) {
-    if (w.sealed && w.verdict) return applySealedWarrant(w);
-
-    // Mirror remote edits, but never yank text out from under someone mid-type.
-    const wpn = $("pick-weapon"), loc = $("pick-location");
-    if (document.activeElement !== wpn && (w.weapon || "") !== wpn.value) wpn.value = w.weapon || "";
-    if (document.activeElement !== loc && (w.location || "") !== loc.value) loc.value = w.location || "";
-
-    if (w.killerId && (!pickedKiller || pickedKiller.id !== w.killerId)) {
-      const s = CASE.suspects.find(x => x.id === w.killerId);
-      if (s) { pickedKiller = s; markLineup(s.id); }
-    } else if (!w.killerId && pickedKiller) {
-      pickedKiller = null; markLineup(null);
-    }
-
-    const valid = Coop.validSignatures(w);
-    const charge = Coop.chargeOf(w);
-    // A signature dropping off because the charge moved is the whole point of
-    // the mechanic, so make it audible rather than silent.
-    if (lastCharge && charge !== lastCharge && Object.keys(w.signatures || {}).length) sfx("paper");
-    lastCharge = charge;
-
-    renderSignatures(w, valid);
-    updateSealState();
-  }
-
-  function markLineup(id) {
-    const box = $("killer-lineup");
-    box.classList.toggle("picked", !!id);
-    [...box.children].forEach(m => {
-      const on = m.dataset.sid === id;
-      m.classList.toggle("accused", on);
-      m.setAttribute("aria-checked", on ? "true" : "false");
-    });
-  }
-
-  function renderSignatures(w, valid) {
-    const box = $("joint-sig-list");
-    box.innerHTML = "";
-    const signed = new Set(valid);
-    const everyone = new Set([DETECTIVE, ...Object.keys(w.signatures || {})]);
-    for (const name of everyone) {
-      const row = el("div", "jsig" + (signed.has(name) ? " on" : ""));
-      row.appendChild(el("span", "jsig-name", "Det. " + name));
-      row.appendChild(el("span", "jsig-state",
-        signed.has(name) ? "signed" : (name === DETECTIVE ? "awaiting your signature" : "not yet signed")));
-      box.appendChild(row);
-    }
-    const iSigned = signed.has(DETECTIVE);
-    const btn = $("seal-btn");
-    btn.innerHTML = iSigned ? "Signed" : "Sign<br>the<br>Warrant";
-    btn.classList.toggle("signed", iSigned);
-    const note = $("joint-note");
-    if (signed.size && signed.size < everyone.size) {
-      note.textContent = iSigned
-        ? "Waiting on your partner. Changing any line below withdraws your signature."
-        : "Your partner has signed. Read it before you do.";
-    } else if (!signed.size) {
-      note.textContent = "A warrant needs both signatures. Either of you may fill it in.";
-    } else {
-      note.textContent = "";
-    }
-  }
-
-  // Sign, or withdraw a signature already given. The second valid signature
-  // triggers the audit and seals.
-  async function signJointWarrant() {
-    const btn = $("seal-btn");
-    if (btn.classList.contains("signed")) { await Coop.unsignWarrant(); return; }
-    if (!pickedKiller || !$("pick-weapon").value.trim() || !$("pick-location").value.trim()) return;
-    btn.disabled = true;
-    try {
-      // flush any pending debounced edit so we sign the charge we can see
-      clearTimeout(warrantPush);
-      await Coop.updateWarrant({
-        killerId: pickedKiller.id, killerName: pickedKiller.name,
-        weapon: $("pick-weapon").value, location: $("pick-location").value
-      });
-      const res = await Coop.signWarrant();
-      if (!res.ok) { btn.disabled = false; return; }
-      sfx("stamp");
-
-      // Everyone present has signed the same charge -> seal it.
-      const roster = new Set([DETECTIVE, ...Object.keys(res.signatures)]);
-      const valid = Object.keys(res.signatures).filter(n => res.signatures[n].on === res.charge);
-      if (valid.length >= 2 && valid.length >= roster.size) {
-        $("joint-note").textContent = "Both signatures on record. Consulting the coroner…";
-        await Coop.sealWarrant(async (w) => {
-          const v = await auditAccusation(w.weapon, w.location);
-          return {
-            killerId: w.killerId, weapon: w.weapon, location: w.location,
-            weaponTyped: w.weapon, locationTyped: w.location,
-            weaponCorrect: v.weapon, locationCorrect: v.location,
-            signedBy: valid, at: new Date().toISOString()
-          };
-        });
-      }
-    } catch (e) {
-      $("joint-note").textContent = "❌ " + e.message;
-    }
-    btn.disabled = false;
-  }
-
-  // Both clients land here through the listener, so the reveal is simultaneous.
-  let sealApplied = false;
-  async function applySealedWarrant(w) {
-    if (sealApplied) return;
-    sealApplied = true;
-    accused = w.verdict;
-    try { await persist(); } catch (e) { /* verdict already lives on the warrant */ }
-    const ab = $("accuse-btn");
-    ab.disabled = true;
-    ab.classList.add("hidden");
-    addResolutionBtn();
-    closeOverlay("accuse-overlay");
-    await showReveal(true);
-  }
-
   async function submitAccusation() {
-    if (Coop.isActive()) return signJointWarrant();
     if (accused) return; // already sealed
     const seal = $("seal-btn");
     const suspect = pickedKiller;
