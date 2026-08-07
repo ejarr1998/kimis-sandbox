@@ -1,0 +1,254 @@
+/* Dead Air — Stage: fullscreen views + split screen */
+
+#stage {
+  position: fixed; inset: 0; z-index: 90; /* below the modal overlays (z 100) */
+  display: flex; flex-direction: column;
+  background:
+    radial-gradient(ellipse at 18% 0%, rgba(201,168,106,0.10), transparent 52%),
+    radial-gradient(ellipse at 85% 95%, rgba(138,47,43,0.05), transparent 50%),
+    var(--ink);
+}
+
+/* ---------- bar ---------- */
+.stage-bar {
+  display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+  padding: 0.55rem 0.9rem;
+  border-bottom: 3px double var(--line);
+  background: linear-gradient(180deg, rgba(22,19,15,0.95), rgba(22,19,15,0.75));
+}
+.stage-nav { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.stage-nav-btn {
+  background: none; color: var(--mute);
+  font-family: "Special Elite", monospace; font-size: 0.68rem;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 0.4rem 0.7rem; border-radius: 3px;
+  border: 1px solid transparent;
+}
+.stage-nav-btn:hover { color: var(--paper); border-color: var(--line); }
+.stage-nav-btn.on { color: var(--brass); background: rgba(201,168,106,0.1); border-color: rgba(201,168,106,0.35); }
+.stage-close {
+  margin-left: auto;
+  background: none; color: var(--red);
+  border: 1px solid rgba(138,47,43,0.55); border-radius: 3px;
+  font-family: "Special Elite", monospace; font-size: 0.7rem;
+  letter-spacing: 0.15em; text-transform: uppercase;
+  padding: 0.4rem 0.8rem;
+}
+.stage-close:hover { background: rgba(138,47,43,0.12); }
+
+/* ---------- panes ---------- */
+.stage-panes { flex: 1; display: flex; min-height: 0; }
+.pane {
+  flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0;
+  border-right: 1px solid var(--line);
+}
+.pane:last-child { border-right: none; }
+.pane-head {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.4rem 0.8rem;
+  border-bottom: 1px solid var(--line);
+  position: relative;
+}
+.pane-title {
+  font-family: "Special Elite", monospace; font-size: 0.66rem;
+  letter-spacing: 0.28em; text-transform: uppercase; color: var(--brass);
+}
+.pane-tools { margin-left: auto; display: flex; gap: 0.3rem; }
+.pane-tool {
+  background: none; color: var(--mute); font-size: 0.78rem;
+  border: 1px solid transparent; border-radius: 3px;
+  padding: 0.18rem 0.5rem;
+  font-family: "Special Elite", monospace; letter-spacing: 0.08em;
+}
+.pane-tool:hover { color: var(--paper); border-color: var(--line); }
+.split-menu {
+  position: absolute; right: 0.4rem; top: calc(100% + 4px); z-index: 5;
+  display: flex; flex-direction: column; min-width: 170px;
+  background: #211c16; border: 1px solid var(--line); border-radius: 4px;
+  box-shadow: 0 10px 26px rgba(0,0,0,0.6);
+  overflow: hidden;
+}
+.split-menu button {
+  background: none; color: var(--paper); text-align: left;
+  font-family: "Special Elite", monospace; font-size: 0.72rem;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 0.55rem 0.8rem;
+}
+.split-menu button:hover { background: rgba(201,168,106,0.12); color: var(--brass); }
+.pane-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+
+/* portrait phones: panes stack 50/50 instead of cramming side by side */
+@media (max-width: 759px) and (orientation: portrait) {
+  .stage-panes.split { flex-direction: column; }
+  .stage-panes.split .pane { border-right: none; border-bottom: 1px solid var(--line); }
+}
+
+/* ---------- Case File Reader ---------- */
+.pane-file .pane-body {
+  display: flex; flex-direction: column; align-items: center;
+  padding: clamp(1rem, 4vw, 3rem) 1rem;
+}
+.reader {
+  width: min(680px, 94vw);
+  padding: clamp(1.4rem, 4vw, 2.6rem);
+  border-radius: 4px;
+}
+.reader-kicker {
+  font-family: "Special Elite", monospace; font-size: 0.62rem;
+  letter-spacing: 0.3em; text-transform: uppercase; color: #5a4520;
+}
+.reader-title {
+  font-family: "Special Elite", monospace; font-size: clamp(1.3rem, 3vw, 1.9rem);
+  color: #241d12; margin: 0.3rem 0 1rem;
+  border-bottom: 3px double rgba(109,84,38,0.5); padding-bottom: 0.6rem;
+}
+.reader-text {
+  font-size: clamp(1.02rem, 1.6vw, 1.15rem); line-height: 1.85; color: #241d12;
+  margin: 0 0 1.2rem;
+}
+.reader-tools { display: flex; flex-wrap: wrap; gap: 0.5rem 1.2rem; align-items: center; }
+.reader-narr { display: inline-flex; align-items: center; gap: 0.5rem; }
+.reader-narr .narr-status { color: var(--red); font-size: 0.8rem; }
+.reader .ghost { color: #5a4520; }
+.reader .stamp-btn { margin-top: 0.3rem; }
+.reader-strip {
+  display: flex; gap: 0.9rem; flex-wrap: wrap; justify-content: center;
+  margin-top: 1.6rem;
+}
+.reader-poi {
+  background: none; display: flex; flex-direction: column; align-items: center; gap: 0.3rem;
+  color: var(--mute); font-family: "Special Elite", monospace; font-size: 0.7rem;
+}
+.reader-poi:hover { color: var(--brass); }
+.reader-poi img, .reader-poi .avatar {
+  width: 52px; height: 52px; border-radius: 3px; object-fit: cover;
+  filter: sepia(0.35); border: 1px solid var(--line); background: #4a443c;
+}
+.reader-poi .avatar { display: flex; align-items: center; justify-content: center; font-size: 1.3rem; }
+
+/* ---------- Lineup Room ---------- */
+.lineup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(230px, 44vw), 1fr));
+  gap: clamp(0.8rem, 2vw, 1.4rem);
+  padding: clamp(1rem, 3vw, 2.2rem);
+  align-content: start;
+}
+.lineup-card {
+  position: relative;
+  background: linear-gradient(170deg, #e9dfc8, #d8caab);
+  color: #2c2519; border-radius: 4px;
+  padding: 1rem 1rem 1.1rem;
+  text-align: center; cursor: pointer;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.5);
+  transition: transform .15s, box-shadow .15s;
+  display: flex; flex-direction: column; align-items: center; gap: 0.7rem;
+}
+.lineup-card:nth-child(odd) { transform: rotate(-0.7deg); }
+.lineup-card:nth-child(even) { transform: rotate(0.6deg); }
+.lineup-card:hover { transform: rotate(0) translateY(-4px); box-shadow: 0 14px 32px rgba(0,0,0,0.6); }
+.lineup-card::before {
+  content: ""; position: absolute; top: -8px; left: 50%; margin-left: -8px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #c25a52, var(--red) 60%, #5c1f1c);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.6);
+}
+.lineup-card img, .lineup-card .avatar {
+  width: clamp(96px, 12vw, 150px); height: clamp(96px, 12vw, 150px);
+  border-radius: 3px; object-fit: cover;
+  filter: sepia(0.35) contrast(1.05);
+  border: 1px solid rgba(60,45,25,0.35); background: #b9a982;
+}
+.lineup-card .avatar {
+  display: flex; align-items: center; justify-content: center;
+  font-family: "Special Elite", monospace; font-size: 2.6rem; color: #5a4520;
+}
+.lineup-meta { display: flex; flex-direction: column; gap: 0.2rem; }
+.lineup-meta .lnm { font-family: "Special Elite", monospace; font-size: 1rem; }
+.lineup-meta .lrl { font-size: 0.85rem; color: #6d5c3e; font-style: italic; }
+.lineup-meta .lintro { font-size: 0.82rem; line-height: 1.5; color: #3a2d15; font-style: italic; margin-top: 0.35rem; }
+.lineup-meta .lcc {
+  margin-top: 0.45rem; font-size: 0.7rem;
+  font-family: "Special Elite", monospace; color: var(--red);
+  border-top: 1px solid rgba(138,47,43,0.4); padding-top: 0.3rem;
+}
+
+/* ---------- Interrogation (docked) ---------- */
+.pane-chat .pane-body.chat-docked {
+  display: flex; flex-direction: column;
+  padding: 0.9rem 1rem;
+}
+.pane-chat .chat-head { flex: none; }
+.pane-chat #chatlog {
+  flex: 1; max-height: none; min-height: 0;
+  overflow-y: auto;
+}
+.pane-chat #chatbar { flex: none; }
+.pane-chat #typing { flex: none; }
+
+/* ---------- War Room Board ---------- */
+.pane-board .pane-body.war-room {
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='c'%3E%3CfeTurbulence baseFrequency='0.35' numOctaves='3'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23c)' opacity='0.22'/%3E%3C/svg%3E"),
+    linear-gradient(170deg, #4d3a26, #3d2e1e);
+}
+.war-tools {
+  flex: none; display: flex; gap: 0.5rem 1.1rem; align-items: center; flex-wrap: wrap;
+  padding: 0.5rem 0.9rem;
+  border-bottom: 1px solid rgba(216,196,154,0.2);
+}
+.war-tools .ghost { color: #d8c49a; padding: 0.2rem 0; }
+.war-label { color: #c9b788; font-size: 0.75rem; font-style: italic; margin-right: 0.2rem; }
+.war-sizes { display: inline-flex; align-items: center; gap: 0.25rem; }
+.war-size {
+  background: none; color: #c9b788; border: 1px solid rgba(216,196,154,0.35);
+  border-radius: 3px; font-family: "Special Elite", monospace; font-size: 0.72rem;
+  padding: 0.15rem 0.5rem;
+}
+.war-size.on, .war-size:hover { color: var(--brass); border-color: var(--brass); }
+.war-room #boardfield {
+  flex: 1; min-height: 0;
+  border-radius: 0;
+}
+.war-room .clue-note { width: var(--notew, min(168px, 42vw)); }
+.war-room.no-strings #strings { display: none; }
+.war-room #summary-card { width: 280px; }
+@media (max-width: 759px) {
+  .war-room #boardfield { min-height: 0; overflow: visible; }
+  .war-room.no-strings #strings { display: none; }
+}
+
+/* ---------- Evidence Locker ---------- */
+.locker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 84vw), 1fr));
+  gap: clamp(0.8rem, 2vw, 1.3rem);
+  padding: clamp(1rem, 3vw, 2.2rem);
+  align-content: start;
+}
+.locker-tag {
+  position: relative;
+  background: linear-gradient(170deg, #dccdaa, #cdbd93);
+  color: #2c2519;
+  border-radius: 4px 4px 14px 4px;
+  padding: 1.5rem 1.3rem 1.1rem;
+  text-align: left; cursor: pointer;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.45);
+  transition: transform .15s, box-shadow .15s;
+  display: flex; flex-direction: column; gap: 0.45rem;
+}
+.locker-tag::before {
+  content: ""; position: absolute; left: 1.1rem; top: 0.8rem;
+  width: 13px; height: 13px; border-radius: 50%;
+  background: var(--ink); box-shadow: inset 0 1px 2px rgba(255,255,255,0.25);
+}
+.locker-tag:hover { transform: translateY(-3px) rotate(-0.4deg); box-shadow: 0 14px 30px rgba(0,0,0,0.55); }
+.locker-tag .lt-name { font-family: "Special Elite", monospace; font-size: 1rem; padding-left: 1.4rem; }
+.locker-tag .lt-state { font-size: 0.72rem; color: #7a6a45; font-style: italic; }
+.locker-tag.examined .lt-state { color: var(--red); font-style: normal; font-family: "Special Elite", monospace; }
+.locker-empty { color: var(--mute); font-style: italic; padding: 2rem; text-align: center; }
+
+/* overlays must stay above the stage */
+.overlay { z-index: 120; }
