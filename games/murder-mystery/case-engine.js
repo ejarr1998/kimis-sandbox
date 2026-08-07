@@ -104,7 +104,10 @@ Requirements:
 - The case MUST be solvable: the killer's guilt must be deducible from facts inside suspects' "knows"/"secrets" plus evidence "reveals" — e.g. a broken alibi, knowledge only the killer would have, a contradicting witness, a damning document.
 - Distribute clues so at least 3 different suspects hold pieces of the solution.
 - Suspects must NEVER need to reference people outside the 6 suspects and the victim — if a fact needs a source, it belongs in an evidence item, not an invented bystander.
-- Red herrings welcome, but they must be resolvable as innocent.
+- NO SMOKING GUNS: no single evidence item, no single suspect "knows" fact, and no single secret may BY ITSELF identify the killer, the weapon, or the location. Guilt must require combining at least 2-3 facts from different sources. The true weapon may appear only CIRCUMSTANTIALLY (e.g. "the ice scraper was recently cleaned and rehung", "a faint smell of bleach near the sink") — evidence descriptions must describe physical observations, never conclusions; writing "this was the murder weapon" or equivalent is forbidden.
+- RED HERRINGS ARE MANDATORY: at least 2 innocent suspects must EACH have a genuine motive AND one piece of circumstantially suspicious behavior (something that looks bad but resolves innocent). Their innocence must be provable from facts present in the case.
+- The killer's public behavior and knowledge must NOT make them the obvious prime suspect: no uniquely nervous behavior, and no "only the killer would know X" fact served early in their knows[] — such facts belong deep in their secrets[] and must require the detective to first learn X elsewhere.
+- keyClues must be raw observable facts, never interpretations or conclusions.
 - Every suspect needs an "intro" line — pure flavor for the meet-the-suspects sequence; it must NEVER leak or hint at who the killer is.
 - Each suspect MUST have a UNIQUE name — no two suspects may share a first or last name.
 - NAMES: each character has exactly ONE full name, used identically in every field of the document. Double-check every mention before finishing — a name spelled two ways (e.g. "Frost" vs "Voss") is a fatal defect.
@@ -114,7 +117,7 @@ Requirements:
 
 ${JSON.stringify(caseJson)}
 
-Perform FOUR audits:
+Perform FIVE audits:
 
 AUDIT A — Name consistency: extract the canonical full name of every suspect and the victim. Search the ENTIRE document (all knows, secrets, alibis, evidence, keyClues, recap, openingScene) for any mention that uses a DIFFERENT or MISSPELLED variant of those names (e.g. "Voss" when the roster says "Frost"). Any near-match surname that differs from the canonical one counts as a defect. Note: a character being referred to by first name, last name, or title+last name is fine as long as the spelling matches canon. ALSO: every suspect's name must be UNIQUE — if two suspects share a first or last name (or any confusingly similar names), report it as an issue and supply a fixes[] entry renaming the duplicate everywhere it appears.
 
@@ -123,6 +126,13 @@ AUDIT B — World closure: no suspect's scripted facts may depend on people outs
 AUDIT C — Solvability: simulate a sharp detective who can only learn facts in suspects' "knows"/"secrets" (secrets only via very pointed questions) and evidence items' "reveals". The killer, weapon AND location must all be deducible without guessing, and every keyClue must be reachable.
 
 AUDIT D — Portrait safety: check every suspect's "physical" description (it feeds verbatim into portrait image generation). It must NOT contain anything incriminating or spoilery — e.g. bloodied clothing/items, a guilty expression, "hiding the knife", or behavior that reveals their role in the crime. If any does, report it as an issue and supply a fixes[] entry replacing the incriminating text with neutral appearance detail.
+
+AUDIT E — Difficulty / telegraphing: the case must not give itself away.
+- Flag if any single evidence description, single evidence "reveals" fact, or single suspect fact ALONE identifies the killer, weapon, or location (a smoking gun). Guilt should require combining 2-3 facts from different sources.
+- Flag if FEWER than 2 innocent suspects have BOTH a genuine motive AND suspicious-but-resolvable circumstances.
+- Flag if the true weapon is named outright in any evidence description AS the weapon (e.g. "the murder weapon"), rather than appearing only circumstantially.
+- Flag if the killer is the obvious prime suspect on first meeting (uniquely nervous behavior, or an early knows[] fact only the killer could know).
+Report these as issues; use patches[] to inject corrective knowledge (e.g. give an innocent suspect a motive or a circumstantial observation that complicates the picture), and use fixes[] to reword a too-direct fact into a neutral physical observation where it is a wording problem.
 
 Answer STRICT JSON:
 {
@@ -138,7 +148,7 @@ Answer STRICT JSON:
       "addKnowledge": "string — ONE fact to inject into that suspect's knows[] or that evidence's reveals[] to fix a logic gap" }
   ]
 }
-Rules: use fixes[] for name/consistency/portrait repairs (max 6), patches[] for solvability gaps (max 3). Set solvable=false AND consistent=false only for fundamentally broken cases with no repair path.`;
+Rules: use fixes[] for name/consistency/portrait/wording repairs (max 6), patches[] for solvability and difficulty gaps (max 3). Set solvable=false AND consistent=false only for fundamentally broken cases with no repair path.`;
 
   function extractJson(text) {
     const m = text.match(/\{[\s\S]*\}/);
