@@ -1,0 +1,81 @@
+/* Dead Air — Buddy Cop mode UI.
+   Loaded always; every rule is inert unless .coop is on <body>. */
+
+/* --- who else is on the case (header strip) --- */
+#coop-bar {
+  display: none;
+  font-family: "Special Elite", monospace;
+  font-size: 0.68rem; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--brass); opacity: 0.85;
+  margin-top: 0.35rem;
+}
+body.coop #coop-bar { display: block; }
+#coop-bar .dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: #6fbf73; margin-right: 0.4rem; vertical-align: middle;
+  box-shadow: 0 0 6px rgba(111,191,115,0.8);
+  animation: coop-pulse 2.4s ease-in-out infinite;
+}
+@keyframes coop-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* --- floor notice above the chat input --- */
+#floor-notice {
+  display: none;
+  font-family: "Special Elite", monospace;
+  font-size: 0.72rem; letter-spacing: 0.08em;
+  padding: 0.5rem 0.7rem; margin-bottom: 0.5rem;
+  border-left: 2px solid var(--brass);
+  background: rgba(201,168,106,0.07);
+  color: var(--mute);
+}
+#floor-notice.show { display: block; }
+#floor-notice b { color: var(--brass); font-style: normal; }
+#floor-notice .countdown { opacity: 0.7; font-style: italic; }
+
+/* held by someone else: the input is readable but plainly not yours */
+#chatbar.locked { opacity: 0.5; }
+#chatbar.locked input,
+#chatbar.locked button { pointer-events: none; }
+
+/* --- per-message attribution (coop only: solo has one detective) --- */
+.bubble .by {
+  display: block;
+  font-family: "Special Elite", monospace;
+  font-size: 0.6rem; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--brass); opacity: 0.75; margin-bottom: 0.25rem;
+}
+.bubble.me .by { color: #9fb8d0; }
+
+/* someone else's question, so it reads as "theirs" not "mine" */
+.bubble.me.theirs { background: #2b2620; border-color: #3d362c; }
+
+/* --- typing indicator --- */
+#coop-typing {
+  font-family: "Special Elite", monospace;
+  font-size: 0.72rem; color: var(--brass); opacity: 0.85;
+  min-height: 1.1rem; letter-spacing: 0.06em;
+}
+#coop-typing .ell::after {
+  content: "…"; display: inline-block;
+  animation: coop-ell 1.4s steps(4, end) infinite;
+}
+@keyframes coop-ell { 0% { clip-path: inset(0 100% 0 0); } 100% { clip-path: inset(0 0 0 0); } }
+
+/* --- lobby mode picker --- */
+.mode-row { display: flex; gap: 0.6rem; margin: 0.2rem 0 0.6rem; }
+.mode-opt {
+  flex: 1; cursor: pointer; border: 1px solid var(--line); border-radius: 3px;
+  padding: 0.6rem 0.7rem; background: rgba(0,0,0,0.2); transition: border-color .15s, background .15s;
+}
+.mode-opt:hover { border-color: var(--brass); }
+.mode-opt input { position: absolute; opacity: 0; width: 0; height: 0; }
+.mode-opt.sel { border-color: var(--brass); background: rgba(201,168,106,0.1); }
+.mode-opt .t {
+  font-family: "Special Elite", monospace; font-size: 0.72rem;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--paper);
+}
+.mode-opt.sel .t { color: var(--brass); }
+.mode-opt .d { font-size: 0.76rem; color: var(--mute); font-style: italic; margin-top: 0.25rem; line-height: 1.45; }
+.mode-opt:focus-within { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+@media (max-width: 520px) { .mode-row { flex-direction: column; } }

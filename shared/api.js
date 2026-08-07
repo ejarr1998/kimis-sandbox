@@ -127,14 +127,24 @@ const SandboxAPI = (() => {
   // ---------- ElevenLabs sound effects ----------
   // Returns an object URL for the generated audio.
   // Endpoint is /v1/sound-generation (/v1/sound-effects does not exist — 404s).
-  async function elevenSFX(description, { durationSeconds = 3 } = {}) {
-    const res = await fetch("https://api.elevenlabs.io/v1/sound-generation", {
+  // `loop: true` produces a seamless loop; requires the v2 sound model.
+  // output_format is a QUERY param, not a body field. Defaults to the low
+  // bitrate tier: these are background garnish, and small blobs cache cleanly
+  // under Firestore's 1MB document limit. Higher tiers need a paid plan.
+  async function elevenSFX(description, { durationSeconds = 3, loop = false, outputFormat = "mp3_22050_32" } = {}) {
+    const res = await fetch(
+      "https://api.elevenlabs.io/v1/sound-generation?output_format=" + encodeURIComponent(outputFormat), {
       method: "POST",
       headers: {
         "xi-api-key": key("elevenlabs"),
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ text: description, duration_seconds: durationSeconds })
+      body: JSON.stringify({
+        text: description,
+        duration_seconds: durationSeconds,
+        loop,
+        model_id: "eleven_text_to_sound_v2"
+      })
     });
     if (!res.ok) throw new Error("ElevenLabs SFX " + res.status + ": " + (await res.text()).slice(0, 120));
     const blob = await res.blob();

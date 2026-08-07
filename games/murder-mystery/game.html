@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="css/game.css">
 <link rel="stylesheet" href="css/stage.css">
 <link rel="stylesheet" href="css/annotate.css">
+<link rel="stylesheet" href="css/coop.css">
 </head>
 <body>
 
@@ -20,6 +21,7 @@
     </div>
     <div class="meta">
       <div class="who" id="subtitle"></div>
+      <div id="coop-bar"></div>
       <button class="icon-btn" id="fs-btn" onclick="toggleAppFullscreen()" aria-label="toggle fullscreen">⛶</button>
       <button class="icon-btn" id="sound-btn" onclick="toggleSound()" aria-label="toggle sound">🔊</button>
       <button class="icon-btn close-file" onclick="location.href='index.html'" aria-label="close file">✕</button>
@@ -135,8 +137,10 @@
       </div>
       <div id="chatlog"></div>
       <div id="typing"></div>
+      <div id="coop-typing"></div>
+      <div id="floor-notice"></div>
       <div id="chatbar">
-        <input id="question" placeholder="Ask a precise question…" onkeydown="if(event.key==='Enter')ask()">
+        <input id="question" placeholder="Ask a precise question…" oninput="onQuestionInput()" onkeydown="if(event.key==='Enter')ask()">
         <button class="stamp-btn" id="ask-btn" onclick="ask()">Ask</button>
       </div>
     </div>
@@ -231,6 +235,7 @@
 
 <script src="../../shared/api.js"></script>
 <script src="case-engine.js"></script>
+<script src="js/coop.js"></script>
 <script src="js/game.js"></script>
 <script src="js/annotate.js"></script>
 <script src="js/stage.js"></script>

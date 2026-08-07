@@ -384,7 +384,9 @@ Rules: use fixes[] for name/consistency/portrait/wording repairs (max 6), patche
     return Array.from({ length: 4 }, () => letters[Math.floor(Math.random() * letters.length)]).join("");
   }
 
-  async function saveCase(caseFile) {
+  // mode: "solo" (private dossiers, the classic game) or "coop" (buddy cop:
+  // one shared transcript per suspect, one clue board, live presence).
+  async function saveCase(caseFile, mode) {
     await SandboxAPI.firebaseApp();
     const db = firebase.firestore();
     // Collision guard: never overwrite an existing case under a reused code.
@@ -398,6 +400,7 @@ Rules: use fixes[] for name/consistency/portrait/wording repairs (max 6), patche
     await db.collection("cases").doc(code).set({
       ...caseFile,
       status: "ready",
+      mode: mode === "coop" ? "coop" : "solo",
       createdAt: new Date().toISOString()
     });
     return code;

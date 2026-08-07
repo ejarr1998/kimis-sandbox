@@ -6,6 +6,7 @@
 <title>Dead Air — Homicide Division</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/coop.css">
 <style>
   :root {
     --ink: #16130f; --paper: #efe6d0; --red: #8a2f2b;
@@ -88,13 +89,23 @@
     <div class="brand">Homicide Division</div>
     <h1>DEAD AIR</h1>
     <div class="red-string"></div>
-    <p class="sub">An asynchronous murder mystery.<br>
-       Every detective works the same case — but your interrogations are your own.<br>
-       Compare notes when it's over.</p>
+    <p class="sub" id="pitch"></p>
   </div>
 
   <div class="panel">
     <div class="panel-title">Open a new case file</div>
+    <div class="mode-row" role="radiogroup" aria-label="How the case is worked">
+      <label class="mode-opt sel" id="opt-solo">
+        <input type="radio" name="mode" value="solo" checked onchange="setMode('solo')">
+        <div class="t">🕵 Separate Dossiers</div>
+        <div class="d">Same case, private interrogations. Compare notes at the end.</div>
+      </label>
+      <label class="mode-opt" id="opt-coop">
+        <input type="radio" name="mode" value="coop" onchange="setMode('coop')">
+        <div class="t">👥 Buddy Cop</div>
+        <div class="d">One shared room. You both sit in on every interrogation.</div>
+      </label>
+    </div>
     <input id="setting" maxlength="140"
       placeholder="Request a setting (optional) — e.g. a Taco Bell at 2am">
     <div class="field-hint">Leave blank and the division assigns a random case file. Any era, any place.</div>
@@ -119,6 +130,22 @@
 <script>
   const statusEl = document.getElementById("status");
 
+  // ---- mode ----
+  let MODE = "solo";
+  const PITCH = {
+    solo: "An asynchronous murder mystery.<br>Every detective works the same case, but your interrogations are your own.<br>Compare notes when it's over.",
+    coop: "A murder mystery for partners.<br>One case, one clue board, one interrogation room.<br>You see every question the moment it's asked."
+  };
+  function setMode(m) {
+    MODE = m;
+    document.getElementById("opt-solo").classList.toggle("sel", m === "solo");
+    document.getElementById("opt-coop").classList.toggle("sel", m === "coop");
+    document.getElementById("pitch").innerHTML = PITCH[m];
+    document.getElementById("host").textContent =
+      m === "coop" ? "🖋 Generate a Shared Case" : "🖋 Generate a Mystery";
+  }
+  setMode("solo");
+
   // Plain-text status: dynamic/error text is always inserted via textContent.
   const status = (t) => { statusEl.textContent = t; };
 
@@ -131,7 +158,9 @@
     b.style.letterSpacing = "0.35em";
     b.textContent = code;
     statusEl.append(b, document.createElement("br"),
-      "Share it with a friend, then take the case below.");
+      MODE === "coop"
+        ? "Send it to your partner. You'll work this one together, in the same room."
+        : "Share it with a friend, then take the case below.");
   }
 
   // Shared detective-name validation rules (mirrored in archive.html).
@@ -156,7 +185,7 @@
       caseFile = result.caseFile;
       await CaseEngine.generatePortraits(caseFile, status);
       status("🔒 Locking the case file…");
-      const code = await CaseEngine.saveCase(caseFile);
+      const code = await CaseEngine.saveCase(caseFile, MODE);
       statusCaseReady(code);
       document.getElementById("code").value = code;
       document.getElementById("name").focus();
