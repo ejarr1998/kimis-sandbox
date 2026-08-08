@@ -314,7 +314,7 @@
       $("status").classList.add("hidden");
       $("game").classList.remove("hidden");
       if (!CASE.evidence.length) $("evidence-panel").classList.add("hidden");
-      if (notesSummary) { $("summary-card").textContent = notesSummary; $("summary-card").classList.remove("hidden"); }
+      if (notesSummary) showSummaryCard(notesSummary);
       if (accused) {
         const ab = $("accuse-btn");
         ab.disabled = true;
@@ -831,8 +831,44 @@
   if (boardModeMQ.addEventListener) boardModeMQ.addEventListener("change", () => renderClues());
   else boardModeMQ.addListener(() => renderClues());
 
-  function makeDraggable(note) {
+  // The AI summary is pinned bottom-right by CSS and was never made draggable,
+  // so it sat immovable on top of the board. It uses a reserved position key
+  // ("summary") rather than a clue index, since it isn't a clue.
+  function showSummaryCard(text) {
+    const card = $("summary-card");
+    if (!card) return;
+    card.textContent = "";
+    const grip = el("div", "sum-grip", "⠿ typed summary");
+    const body = el("div", "sum-body", text);
+    card.appendChild(grip);
+    card.appendChild(body);
+    card.classList.remove("hidden");
+    card.dataset.idx = "summary";
+    if (!card.dataset.draggable) {
+      card.dataset.draggable = "1";
+      card.tabIndex = 0;
+      card.setAttribute("aria-label", "Typed summary — drag by the grip to move");
+      makeDraggable(card, ".sum-grip");
+    }
+    const p = loadBoardPos().summary;
+    if (p) placeSummaryCard(p.x, p.y);
+  }
+
+  // Dragging writes left/top, but the CSS anchors the card with right/bottom.
+  // Both set at once fights, so clear the anchors as soon as it has a position.
+  function placeSummaryCard(x, y) {
+    const card = $("summary-card");
+    card.style.right = "auto";
+    card.style.bottom = "auto";
+    card.style.left = x + "%";
+    card.style.top = y + "%";
+  }
+
+  function makeDraggable(note, handleSel) {
     note.addEventListener("pointerdown", (e) => {
+      // The summary card scrolls its own text, so it drags from a grip strip
+      // instead of anywhere on the card.
+      if (handleSel && !(e.target.closest && e.target.closest(handleSel))) return;
       e.preventDefault();
       note.setPointerCapture(e.pointerId);
       note.classList.add("dragging");
@@ -845,6 +881,7 @@
         let y = ((ev.clientY - fr.top - offY) / fr.height) * 100;
         const c = clampBoardPos(x, y, note.offsetHeight);
         x = c.x; y = c.y;
+        if (note.id === "summary-card") { note.style.right = "auto"; note.style.bottom = "auto"; }
         note.style.left = x + "%";
         note.style.top = y + "%";
         drawStrings();
@@ -957,6 +994,8 @@
         pos[idx] = clampBoardPos(colX + (j % 2) * 2, yPct, noteH);
       });
     });
+    const prevSummary = loadBoardPos().summary;
+    if (prevSummary) pos.summary = prevSummary; // not a clue; don't lose it
     saveBoardPos(pos);
     const notes = [...field.querySelectorAll(".clue-note")];
     for (const n of notes) {
@@ -982,6 +1021,8 @@
   function resetBoard() {
     const field = $("boardfield");
     if (field) field.style.minHeight = "";
+    const card = $("summary-card");
+    if (card) { card.style.left = ""; card.style.top = ""; card.style.right = ""; card.style.bottom = ""; }
     saveBoardPos({});
     renderClues();
     sfx("paper");
@@ -1015,8 +1056,7 @@ Max 250 words total. Be specific with names, never say "the suspect".`,
         const lines = notesSummary.split("\n");
         if (lines.length > 1) { lines.pop(); notesSummary = lines.join("\n").trimEnd(); }
       }
-      $("summary-card").textContent = notesSummary;
-      $("summary-card").classList.remove("hidden");
+      showSummaryCard(notesSummary);
       if (!desktop()) renderClues(); // refresh the mobile "📋 Typed summary" section
       $("organize-status").textContent = "typed " + new Date().toLocaleTimeString();
       sfx("paper");
