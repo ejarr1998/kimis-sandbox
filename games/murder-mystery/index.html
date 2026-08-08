@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/coop.css">
+<link rel="stylesheet" href="css/confront.css">
 <style>
   :root {
     --ink: #16130f; --paper: #efe6d0; --red: #8a2f2b;
@@ -118,6 +119,10 @@
     <input id="setting" maxlength="140"
       placeholder="Request a setting (optional) — e.g. a Taco Bell at 2am">
     <div class="field-hint">Leave blank and the division assigns a random case file.</div>
+    <label class="lit-row" id="literal-row">
+      <input type="checkbox" id="literal">
+      <span>Use the named place <b>literally</b> — a real Taco Bell, not "a late-night taqueria"</span>
+    </label>
     <select id="era" aria-label="Era the case is set in">
       <option value="">Surprise me — any era</option>
       <option>Present day</option>
@@ -134,6 +139,17 @@
       <option>Near future</option>
     </select>
     <div class="field-hint">The division's files skew old-school — pick an era to force the case modern (or any decade you like).</div>
+    <details id="victim-box">
+      <summary>⚰ Cast the victim (optional)</summary>
+      <div class="field-hint" style="margin:0.5rem 0 0.2rem">
+        Name the person who dies. Everything else — the suspects, the motives, the
+        whole case — gets built around them.
+      </div>
+      <div class="cast-row">
+        <input class="cast-name" id="victim-name" maxlength="40" placeholder="Victim's name">
+        <input class="cast-role" id="victim-role" maxlength="60" placeholder="Who they were (e.g. the night manager)">
+      </div>
+    </details>
     <details id="cast-box">
       <summary>🎭 Pre-cast suspects (optional)</summary>
       <div class="field-hint" style="margin:0.5rem 0 0.2rem">
@@ -179,6 +195,17 @@
       m === "coop" ? "🖋 Generate a Shared Case" : "🖋 Generate a Mystery";
   }
   setMode("solo");
+
+  // The literal lock is meaningless without a named place, so it only appears
+  // once the host has typed a setting.
+  (function wireLiteralToggle() {
+    const inp = document.getElementById("setting");
+    const row = document.getElementById("literal-row");
+    if (!inp || !row) return;   // never let a missing node kill the lobby script
+    const sync = () => row.classList.toggle("on", !!inp.value.trim());
+    inp.addEventListener("input", sync);
+    sync();
+  })();
 
   // Plain-text status: dynamic/error text is always inserted via textContent.
   const status = (t) => { statusEl.textContent = t; };
@@ -243,14 +270,23 @@
     const btn = document.getElementById("host");
     const setting = document.getElementById("setting").value.trim();
     const era = document.getElementById("era").value;
+    const literal = document.getElementById("literal").checked;
+    const victim = {
+      name: document.getElementById("victim-name").value.trim(),
+      role: document.getElementById("victim-role").value.trim()
+    };
     const { cast, error } = collectCast();
+    if (victim.name && cast.some(c => c.name.toLowerCase() === victim.name.toLowerCase())) {
+      status(`❌ "${victim.name}" is cast as both the victim and a suspect.`); return;
+    }
     if (error) { status("❌ " + error); return; }
     btn.disabled = true;
     try {
-      let caseFile = await CaseEngine.generateCase(status, setting, { era, cast });
+      let caseFile = await CaseEngine.generateCase(status, setting, { era, cast, victim, literal });
       const result = await CaseEngine.validateAndPatch(caseFile, status);
       caseFile = result.caseFile;
       await CaseEngine.generatePortraits(caseFile, status);
+      await CaseEngine.generateSceneImage(caseFile, status);
       status("🔒 Locking the case file…");
       const code = await CaseEngine.saveCase(caseFile, MODE);
       statusCaseReady(code);

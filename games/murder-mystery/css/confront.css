@@ -60,3 +60,68 @@
   white-space: pre-wrap;
 }
 #summary-card.dragging { opacity: 0.9; box-shadow: 0 12px 26px rgba(0,0,0,0.6); }
+
+/* ---------- establishing shot + victim card ---------- */
+#scene-shot { margin: 0 0 1rem; position: relative; }
+#scene-shot.hidden { display: none; }
+#scene-shot img {
+  display: block; width: 100%; height: auto; max-height: 260px;
+  object-fit: cover; border-radius: 2px;
+  filter: saturate(0.85) contrast(1.05);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+}
+/* the report is aged paper, so the photo is toned to sit on it rather than glow */
+#scene-shot::after {
+  content: ""; position: absolute; inset: 0; border-radius: 2px;
+  background: linear-gradient(180deg, rgba(30,24,16,0.05), rgba(30,24,16,0.42));
+  pointer-events: none;
+}
+#scene-cap {
+  margin-top: 0.4rem;
+  font-family: "Special Elite", monospace;
+  font-size: 0.64rem; letter-spacing: 0.16em; text-transform: uppercase;
+  color: #6b5f4c;
+}
+
+#victim-card {
+  display: flex; align-items: center; gap: 0.7rem;
+  margin: 0 0 0.9rem; padding: 0.55rem 0.7rem;
+  border-left: 3px solid var(--red);
+  background: rgba(138,47,43,0.07);
+}
+#victim-card.hidden { display: none; }
+/* makePortrait returns a bare <img> or a .avatar div, never a .portrait */
+#victim-card > img, #victim-card > .avatar {
+  width: 52px; height: 52px; flex: 0 0 52px;
+  border-radius: 2px; object-fit: cover; filter: grayscale(0.55);
+}
+#victim-card > .avatar {
+  display: grid; place-items: center;
+  background: #3a332a; color: var(--brass);
+  font-family: "Special Elite", monospace; font-size: 1.4rem;
+}
+#victim-card .vc-name {
+  font-family: "Special Elite", monospace; font-size: 0.95rem; color: #2c2519;
+}
+#victim-card .vc-label {
+  font-size: 0.66rem; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--red); opacity: 0.8; margin-top: 0.1rem;
+}
+
+/* the scene photo as a faint wash behind the whole desk */
+body.has-scene::before {
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image: var(--scene-url);
+  background-size: cover; background-position: center;
+  opacity: 0.07; filter: grayscale(0.4) blur(2px);
+}
+
+/* lobby: literal-place toggle */
+.lit-row {
+  display: none; align-items: flex-start; gap: 0.5rem;
+  margin: 0.5rem 0 0.2rem; cursor: pointer;
+  font-size: 0.8rem; color: var(--mute); line-height: 1.45;
+}
+.lit-row.on { display: flex; }
+.lit-row b { color: var(--brass); font-weight: normal; }
+.lit-row input { margin-top: 0.2rem; accent-color: #c9a86a; }

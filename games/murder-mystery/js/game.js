@@ -241,11 +241,40 @@
     }
   }
 
+  // The establishing shot: the setting itself at the hour of the murder, no
+  // people. Sets the tone at the top of the report and tints the whole desk.
+  function renderSceneShot() {
+    const fig = $("scene-shot");
+    if (!fig || !CASE.sceneImageUrl) return;
+    $("scene-img").src = CASE.sceneImageUrl;
+    $("scene-img").alt = CASE.sceneImage || CASE.setting || "the scene";
+    $("scene-cap").textContent = CASE.setting || "";
+    fig.classList.remove("hidden");
+    // reuse the shot as a faint backdrop behind the whole desk
+    document.body.style.setProperty("--scene-url", `url("${CASE.sceneImageUrl}")`);
+    document.body.classList.add("has-scene");
+  }
+
+  // The victim is a person, not a plot device — give them a face in the report.
+  function renderVictimCard() {
+    const box = $("victim-card");
+    if (!box || !CASE.victim) return;
+    box.textContent = "";
+    box.appendChild(makePortrait(CASE.victim.name, CASE.victim.portrait));
+    const txt = el("div", "vc-text");
+    txt.appendChild(el("div", "vc-name", CASE.victim.name));
+    txt.appendChild(el("div", "vc-label", "the deceased"));
+    box.appendChild(txt);
+    box.classList.remove("hidden");
+  }
+
   // ---------- dossier boot sequencing ----------
   let dossierStarted = false;
   function startDossier() {
     if (dossierStarted) return;
     dossierStarted = true;
+    renderSceneShot();
+    renderVictimCard();
     // The report is reference material you'll re-read all game, not a reveal,
     // so it's shown in full immediately. (The Stage's fullscreen file view has
     // always rendered it this way; this makes the desk copy match.) The

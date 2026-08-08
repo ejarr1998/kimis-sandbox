@@ -64,7 +64,8 @@ const CaseEngine = (() => {
   const CASE_SCHEMA = `{
   "title": "string — evocative case title",
   "setting": "string — 2-3 sentence world/location description",
-  "victim": { "name": "string", "description": "string — who they were, how found" },
+  "victim": { "name": "string", "description": "string — who they were, how found", "physical": "string — detailed appearance IN LIFE for portrait generation; never show wounds, blood or the body" },
+  "sceneImage": "string — a vivid one-sentence establishing-shot description of the SETTING ITSELF at the hour of the murder. No people, no body. Name the real place explicitly if the setting names one. Include weather, light and mood, e.g. 'a roadside Taco Bell at 2am in heavy rain, neon sign bleeding across a wet empty parking lot'.",
   "artStyle": "string — ONE consistent portrait style that fits this case's era and mood, e.g. 'moody noir pencil sketch, dramatic shadows, muted sepia tones' for a period case, or 'grainy smartphone photo, fluorescent lighting, desaturated colors' for a modern case. Applied verbatim to every portrait.",
   "solution": {
     "killerId": "string — id of the true killer from suspects",
@@ -99,7 +100,7 @@ const CaseEngine = (() => {
 }`;
 
   const GEN_PROMPT = (setting, opts = {}) => {
-    const { custom = false, era = null, cast = [] } = opts;
+    const { custom = false, era = null, cast = [], victim = null, literal = false } = opts;
 
     // Era lock: the host can pin the case to a decade. Modern eras get an
     // explicit reminder that smartphones/DNA/CCTV exist so the AI doesn't
@@ -113,12 +114,22 @@ THE HOST HAS PRE-CAST ${cast.length} OF THE 6 SUSPECTS — they MUST appear with
 ${cast.map(c => `- ${c.name} — ${c.role}`).join("\n")}
 Build each one's id, personality, alibi, knows/secrets and physical description around who they are. Their role is their relationship to the victim, so write a victim whose life plausibly includes all of them. Any of them MAY be the killer. Invent the remaining ${6 - cast.length} suspect(s) yourself.` : "";
 
+    // Victim pre-casting: same idea as the suspect cast, but the victim shapes
+    // the whole case, so it gets its own block.
+    const victimBlock = (victim && victim.name) ? `
+THE VICTIM IS PRE-CAST BY THE HOST: ${victim.name}${victim.role ? ` — ${victim.role}` : ""}. Use EXACTLY this name. Build the victim's description, life and relationships around them, and make every suspect's connection to ${victim.name} concrete.` : "";
+
+    // Literal setting lock. Without this the writer reliably files the serial
+    // numbers off — ask for Taco Bell and get "a generic late-night taqueria".
+    const literalBlock = literal ? `
+USE THE NAMED PLACE LITERALLY. The setting names a real, specific place or brand. Do NOT substitute a generic equivalent, do NOT rename it, do NOT invent a soundalike. If it says Taco Bell, the case is set in an actual Taco Bell — the menu, the uniforms, the drive-thru, the branding, the smell of the fryer. Use the real name verbatim in setting, openingScene, locations[], evidence and sceneImage. Locations must be real sub-areas of that place (the drive-thru window, the walk-in freezer, the dining room, the dumpster corral), not invented wings or annexes it would not have.` : "";
+
     return `You are a master mystery writer. Generate ONE complete, original murder mystery case as STRICT JSON (no markdown fences, no commentary) matching this schema exactly:
 
 ${CASE_SCHEMA}
 
 THE SETTING FOR THIS CASE IS ALREADY CHOSEN — you MUST use it: ${setting}.
-Build everything (victim, suspects, weapons, locations, evidence, era, tone, artStyle) to fit that world.${custom ? " This setting was personally requested by the host — honor its specific details (brands, era, place) faithfully and lean into what makes it distinctive." : ""}${eraBlock}${castBlock}
+Build everything (victim, suspects, weapons, locations, evidence, era, tone, artStyle) to fit that world.${custom ? " This setting was personally requested by the host — honor its specific details (brands, era, place) faithfully and lean into what makes it distinctive." : ""}${eraBlock}${literalBlock}${victimBlock}${castBlock}
 
 Requirements:
 - Exactly 6 suspects. Exactly ONE is the killer. Set liar:true on the killer AND on at least 2 innocent suspects who will actively lie to protect an unrelated secret. Being a liar must NOT correlate with being the killer.
@@ -269,6 +280,11 @@ Rules: use fixes[] for name/consistency/portrait/wording repairs (max 6), patche
   async function generateCase(onStatus, customSetting, options = {}) {
     const custom = (customSetting || "").trim();
     const era = (options.era || "").trim() || null;
+    const literal = !!options.literal;
+    const victim = (options.victim && options.victim.name)
+      ? { name: String(options.victim.name).trim().slice(0, 60),
+          role: String(options.victim.role || "").trim().slice(0, 80) }
+      : null;
     const cast = (options.cast || [])
       .map(c => ({ name: (c.name || "").trim().slice(0, 40), role: (c.role || "").trim().slice(0, 60) }))
       .filter(c => c.name)
@@ -279,7 +295,7 @@ Rules: use fixes[] for name/consistency/portrait/wording repairs (max 6), patche
     let lastError = null;
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const raw = await SandboxAPI.claude(GEN_PROMPT(setting, { custom: !!custom, era, cast }), { maxTokens: 16000 });
+        const raw = await SandboxAPI.claude(GEN_PROMPT(setting, { custom: !!custom, era, cast, victim, literal }), { maxTokens: 16000 });
         const caseFile = extractJson(raw);
         caseFile.requestedSetting = custom || null;
         caseFile.requestedEra = era;
@@ -415,6 +431,22 @@ Rules: use fixes[] for name/consistency/portrait/wording repairs (max 6), patche
   }
 
   // ---------- Stage 3: portraits ----------
+  // One establishing shot of the setting itself. Deliberately people-free: it
+  // sets the tone without spoiling anyone's appearance or the state of the body.
+  async function generateSceneImage(caseFile, onStatus) {
+    const desc = (caseFile.sceneImage || caseFile.setting || "").trim();
+    if (!desc) return caseFile;
+    onStatus?.("🌧 Photographing the scene…");
+    try {
+      const img = await SandboxAPI.grokImage(
+        `${caseFile.artStyle}. Wide establishing shot, no people, no bodies, no text: ${desc}`);
+      caseFile.sceneImageUrl = img.url;
+    } catch (e) {
+      caseFile.sceneImageUrl = null; // the game falls back to its painted backdrop
+    }
+    return caseFile;
+  }
+
   async function generatePortraits(caseFile, onStatus) {
     for (let i = 0; i < caseFile.suspects.length; i++) {
       const s = caseFile.suspects[i];
@@ -425,6 +457,17 @@ Rules: use fixes[] for name/consistency/portrait/wording repairs (max 6), patche
         s.portrait = img.url;
       } catch (e) {
         s.portrait = null; // game shows initial-letter avatar fallback
+      }
+    }
+    // The victim is a character too — the dossier and reveal both show them.
+    if (caseFile.victim && caseFile.victim.physical) {
+      onStatus?.(`🎨 Painting ${caseFile.victim.name}…`);
+      try {
+        const img = await SandboxAPI.grokImage(
+          `${caseFile.artStyle}. Character portrait of ${caseFile.victim.name}, photographed in life before their death. ${caseFile.victim.physical}. Head-and-shoulders, centered, no text, no injuries, no blood.`);
+        caseFile.victim.portrait = img.url;
+      } catch (e) {
+        caseFile.victim.portrait = null;
       }
     }
     return caseFile;
@@ -485,5 +528,5 @@ Rules: use fixes[] for name/consistency/portrait/wording repairs (max 6), patche
     return ref;
   }
 
-  return { generateCase, validateAndPatch, generatePortraits, saveCase, loadCase, joinCase };
+  return { generateCase, validateAndPatch, generatePortraits, generateSceneImage, saveCase, loadCase, joinCase };
 })();
