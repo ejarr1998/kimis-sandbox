@@ -1,7 +1,7 @@
   const params = new URLSearchParams(location.search);
   const CODE = params.get("case"), DETECTIVE = params.get("detective");
   let CASE = null, playerRef = null, myClues = [], chats = {}, examined = [],
-      accused = null, currentSuspect = null, notesSummary = "", pickedKiller = null,
+      accused = null, currentSuspect = null, notesSummary = "", pickedKiller = null, questioned = [],
       hiddenClues = [], // archived notes: [{text, from}] — display-only, clues stay in myClues
       rankings = {}; // Board of Suspicion: {suspectId: 0-100}, private per detective
 
@@ -291,6 +291,7 @@
       rankings = me.rankings || {};
       accused = me.accusation; notesSummary = me.notesSummary || "";
       Confront.load(me.witnessed || {});
+      questioned = me.questioned || Object.keys(chats); // migrate old saves
       lastClueCount = myClues.length;
 
       // ---- buddy cop ----
@@ -834,6 +835,19 @@
   // The AI summary is pinned bottom-right by CSS and was never made draggable,
   // so it sat immovable on top of the board. It uses a reserved position key
   // ("summary") rather than a clue index, since it isn't a clue.
+  // Who has actually been interviewed. Tracked explicitly because `chats` is
+  // NOT a reliable source: in coop the transcripts live in a shared Firestore
+  // subcollection and the local chats object is empty after any reload, which
+  // made the end-of-case stats report "questioned 0 of 6".
+  function markQuestioned(sid) {
+    if (!sid || questioned.includes(sid)) return;
+    questioned.push(sid);
+  }
+  function questionedCount() {
+    // union of both sources, so old saves that only have chats still count
+    return new Set([...questioned, ...Object.keys(chats)]).size;
+  }
+
   function showSummaryCard(text) {
     const card = $("summary-card");
     if (!card) return;
@@ -1202,6 +1216,7 @@ HARD RULES:
     const sid = currentSuspect.id;
     chats[sid] = chats[sid] || [];
     chats[sid].push({ role: "user", text: q });
+    markQuestioned(sid);
     renderChat(false);
     $("typing").textContent = currentSuspect.name + " is thinking…";
     const askBtn = $("ask-btn");
@@ -1243,6 +1258,7 @@ HARD RULES:
       (msgs) => {
         if (!currentSuspect || currentSuspect.id !== s.id) return;
         chats[s.id] = msgs;
+        if (msgs.length) markQuestioned(s.id);
         // Type out only a genuinely new reply, so a listener firing for an
         // unrelated reason doesn't replay the whole transcript.
         const grew = msgs.length > seenMsgCount;
@@ -1350,6 +1366,7 @@ HARD RULES:
 
     try {
       await Coop.postMessage(sid, { role: "user", text: q });
+      markQuestioned(sid);
       await Coop.setGenerating(sid, true);
       $("typing").textContent = s.name + " is thinking…";
 
@@ -1426,6 +1443,8 @@ HARD RULES:
     const sid = primary.id;
     chats[sid] = chats[sid] || [];
     chats[sid].push({ role: "user", text: q });
+    markQuestioned(sid);
+    markQuestioned(other.id);   // they were in the room and were spoken to
     renderChat(false);
     $("typing").textContent = `${primary.name} and ${other.name} are in the room…`;
     $("ask-btn").disabled = true;
@@ -1492,7 +1511,7 @@ HARD RULES:
 
   async function persist() {
     const doc = { examined, accusation: accused, notesSummary,
-      hiddenClues, rankings, witnessed: Confront.all(),
+      hiddenClues, rankings, witnessed: Confront.all(), questioned,
       lastActive: new Date().toISOString() };
     // In coop the clue board and transcripts are shared documents; writing them
     // back per-player would fight the listener and resurrect deleted clues.
@@ -1910,7 +1929,7 @@ HARD RULES:
     cmp.appendChild(ul);
     cmp.appendChild(el("div", "sub",
       `You uncovered ${found.length} of ${CASE.keyClues.length} key facts, ` +
-      `questioned ${Object.keys(chats).length} of ${CASE.suspects.length} suspects, ` +
+      `questioned ${questionedCount()} of ${CASE.suspects.length} suspects, ` +
       `examined ${examined.length} of ${CASE.evidence.length} evidence items.`));
 
     openOverlay("reveal-overlay");
@@ -1929,7 +1948,7 @@ HARD RULES:
           const li = document.createElement("li");
           li.appendChild(el("b", null, d.id));
           li.appendChild(document.createTextNode(`: uncovered ${theirFound.length}/${CASE.keyClues.length} key facts, ` +
-            `questioned ${Object.keys(p.chats || {}).length} suspects — ${verdict}`));
+            `questioned ${new Set([...(p.questioned || []), ...Object.keys(p.chats || {})]).size} suspects — ${verdict}`));
           return li;
         });
         const pc = $("peer-comparison");
