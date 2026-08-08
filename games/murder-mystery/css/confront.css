@@ -1,0 +1,42 @@
+/* Dead Air — confrontations: bringing a second suspect into the room */
+
+#escort-bar {
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+  position: relative;
+  margin: 0 0 0.5rem;
+  min-height: 1.9rem;
+}
+#escort-bar.active {
+  border-left: 2px solid var(--brass);
+  background: rgba(201,168,106,0.07);
+  padding: 0.35rem 0.6rem;
+}
+.escort-who {
+  font-family: "Special Elite", monospace;
+  font-size: 0.72rem; letter-spacing: 0.1em; color: var(--brass);
+}
+
+/* picker */
+.escort-menu {
+  position: absolute; top: 100%; left: 0; z-index: 30;
+  display: flex; flex-direction: column; min-width: 190px;
+  background: #17140f; border: 1px solid var(--line); border-radius: 3px;
+  box-shadow: 0 10px 26px rgba(0,0,0,0.55);
+}
+.escort-menu button {
+  background: none; border: 0; color: var(--paper); cursor: pointer;
+  font-family: "EB Garamond", serif; font-size: 0.9rem;
+  text-align: left; padding: 0.5rem 0.75rem;
+}
+.escort-menu button:hover { background: rgba(201,168,106,0.14); color: var(--brass); }
+
+/* "X is brought in." — scene direction, not speech */
+.stage-line {
+  text-align: center;
+  font-family: "Special Elite", monospace;
+  font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--mute); opacity: 0.8;
+  margin: 0.6rem 0; padding: 0.3rem 0;
+  border-top: 1px dashed rgba(201,168,106,0.25);
+  border-bottom: 1px dashed rgba(201,168,106,0.25);
+}
