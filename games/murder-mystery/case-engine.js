@@ -121,13 +121,15 @@ THE SETTING FOR THIS CASE IS ALREADY CHOSEN — you MUST use it: ${setting}.
 Build everything (victim, suspects, weapons, locations, evidence, era, tone, artStyle) to fit that world.${custom ? " This setting was personally requested by the host — honor its specific details (brands, era, place) faithfully and lean into what makes it distinctive." : ""}${eraBlock}${castBlock}
 
 Requirements:
-- Exactly 6 suspects. Exactly ONE is the killer (liar: true). One OTHER suspect may also be a liar about something unrelated (a red herring). Everyone else lies only by omission.
+- Exactly 6 suspects. Exactly ONE is the killer. Set liar:true on the killer AND on at least 2 innocent suspects who will actively lie to protect an unrelated secret. Being a liar must NOT correlate with being the killer.
+- EVERY suspect must have at least one secret they would lie to protect — something embarrassing, criminal, or humiliating that has nothing to do with the murder (an affair, theft, addiction, a forged credential, a debt, an illegitimate child, a betrayal). If a detective can identify the killer just by noticing who gets evasive, the case has failed.
 - Exactly 3-4 evidence items: physical objects the detective can examine (documents, the body, objects at the scene). At least ONE keyClue must come from evidence rather than from any suspect, so interrogation alone is never enough.
 - The case MUST be solvable: the killer's guilt must be deducible from facts inside suspects' "knows"/"secrets" plus evidence "reveals" — e.g. a broken alibi, knowledge only the killer would have, a contradicting witness, a damning document.
 - Distribute clues so at least 3 different suspects hold pieces of the solution.
 - Suspects must NEVER need to reference people outside the 6 suspects and the victim — if a fact needs a source, it belongs in an evidence item, not an invented bystander.
 - NO SMOKING GUNS: no single evidence item, no single suspect "knows" fact, and no single secret may BY ITSELF identify the killer, the weapon, or the location. Guilt must require combining at least 2-3 facts from different sources. The true weapon may appear only CIRCUMSTANTIALLY (e.g. "the ice scraper was recently cleaned and rehung", "a faint smell of bleach near the sink") — evidence descriptions must describe physical observations, never conclusions; writing "this was the murder weapon" or equivalent is forbidden.
-- RED HERRINGS ARE MANDATORY: at least 2 innocent suspects must EACH have a genuine motive AND one piece of circumstantially suspicious behavior (something that looks bad but resolves innocent). Their innocence must be provable from facts present in the case.
+- RED HERRINGS ARE MANDATORY: at least 3 innocent suspects must EACH have a genuine motive AND one piece of circumstantially suspicious behavior (something that looks bad but resolves innocent). Their innocence must be provable from facts present in the case, but NOT provable early — the exculpating fact must itself require digging.
+- At least one innocent must look WORSE on the surface than the killer does: a stronger apparent motive, a shakier alibi, or more damning circumstantial evidence. The killer must never be the most obvious suspect at the halfway point.
 - The killer's public behavior and knowledge must NOT make them the obvious prime suspect: no uniquely nervous behavior, and no "only the killer would know X" fact served early in their knows[] — such facts belong deep in their secrets[] and must require the detective to first learn X elsewhere.
 - keyClues must be raw observable facts, never interpretations or conclusions.
 - Every suspect needs an "intro" line — pure flavor for the meet-the-suspects sequence; it must NEVER leak or hint at who the killer is.
@@ -152,7 +154,9 @@ AUDIT D — Portrait safety: check every suspect's "physical" description (it fe
 
 AUDIT E — Difficulty / telegraphing: the case must not give itself away.
 - Flag if any single evidence description, single evidence "reveals" fact, or single suspect fact ALONE identifies the killer, weapon, or location (a smoking gun). Guilt should require combining 2-3 facts from different sources.
-- Flag if FEWER than 2 innocent suspects have BOTH a genuine motive AND suspicious-but-resolvable circumstances.
+- Flag if FEWER than 3 innocent suspects have BOTH a genuine motive AND suspicious-but-resolvable circumstances.
+- EVASION TEST: assume every suspect flagged liar:true will stonewall pointed questions and everyone else will fold. If that behavioural difference alone narrows the field to the killer, the case fails. Require liar:true on the killer AND at least 2 innocents, and require every suspect to hold at least one secret worth lying about.
+- OBVIOUSNESS TEST: rank all 6 suspects by how guilty they look from the openingScene plus their alibi alone, ignoring deep secrets. If the killer ranks 1st or 2nd, the case fails — patch in a stronger apparent motive or a weaker alibi for an innocent until at least two innocents look worse than the killer does.
 - Flag if the true weapon is named outright in any evidence description AS the weapon (e.g. "the murder weapon"), rather than appearing only circumstantially.
 - Flag if the killer is the obvious prime suspect on first meeting (uniquely nervous behavior, or an early knows[] fact only the killer could know).
 Report these as issues; use patches[] to inject corrective knowledge (e.g. give an innocent suspect a motive or a circumstantial observation that complicates the picture), and use fixes[] to reword a too-direct fact into a neutral physical observation where it is a wording problem.
@@ -208,8 +212,10 @@ Rules: use fixes[] for name/consistency/portrait/wording repairs (max 6), patche
       const trimmed = solution.location.trim();
       if (locations.includes(trimmed)) solution.location = trimmed;
     }
-    // Gentle auto-repair: if killerId doesn't match but exactly one suspect
-    // is flagged liar:true, that suspect is the intended killer.
+    // Gentle auto-repair: if killerId doesn't match a suspect but exactly one
+    // is flagged liar:true, that lone liar was the intended killer. With 3+
+    // liars now expected this rarely fires, and inferring from the flag would
+    // be wrong — liar:true no longer implies guilt.
     const liars = suspects.filter(s => s.liar === true);
     if (!suspects.some(s => s.id === solution.killerId) && liars.length === 1) {
       solution.killerId = liars[0].id;
@@ -226,8 +232,15 @@ Rules: use fixes[] for name/consistency/portrait/wording repairs (max 6), patche
     if (new Set(names).size !== names.length) {
       problems.push("suspect names are not unique");
     }
-    if (liars.length < 1 || liars.length > 2) {
-      problems.push(`expected 1-2 suspects with liar:true (killer + optional red herring), got ${liars.length}`);
+    // The killer must not be the only liar: if evasiveness is unique to them,
+    // a detective can find the killer without following any evidence at all.
+    if (liars.length < 3) {
+      problems.push(`expected at least 3 suspects with liar:true (killer + 2 or more innocents), got ${liars.length} — evasiveness would identify the killer on its own`);
+    }
+    // Likewise, everyone needs something of their own to guard.
+    const secretless = suspects.filter(s => !Array.isArray(s.secrets) || !s.secrets.length);
+    if (secretless.length) {
+      problems.push(`every suspect needs at least one secret to protect; missing for: ${secretless.map(s => s.name || s.id).join(", ")}`);
     }
     if (!suspects.some(s => s.id === solution.killerId)) {
       problems.push(`solution.killerId "${solution.killerId}" matches no suspect id`);
