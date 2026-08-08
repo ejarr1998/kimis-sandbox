@@ -620,7 +620,11 @@
     return clampBoardPos(col === 0 ? gap : 2 * gap + wPct, 2 + row * 26, 0);
   }
 
-  // grow the field so the lowest note is never cut off vertically (floor 480px)
+  // Grow the field so the lowest note is never cut off vertically (floor 480px).
+  // Measures against the field's CURRENT height while notes are positioned in
+  // percentages, so this can only ever be called to *settle* a layout, never
+  // repeatedly — see the note in autoArrange. It shrinks as well as grows so a
+  // dragged-then-moved-back note doesn't leave the board permanently tall.
   function fitBoardHeight() {
     const field = $("boardfield");
     if (!field || !field.clientWidth) return;
@@ -628,8 +632,9 @@
     for (const n of field.querySelectorAll(".clue-note"))
       maxBottom = Math.max(maxBottom, n.offsetTop + n.offsetHeight);
     const needed = Math.max(480, maxBottom + 24);
-    if (needed > 480 || field.style.minHeight)
-      field.style.minHeight = needed + "px";
+    const current = parseFloat(field.style.minHeight) || 0;
+    // Only act on a real change; a 1-2px jitter would otherwise creep upward.
+    if (Math.abs(needed - current) > 4) field.style.minHeight = needed + "px";
   }
 
   // ---------- archived (tucked-away) notes ----------
@@ -926,29 +931,58 @@
       (groups[f] = groups[f] || []).push(i);
     });
     const srcs = Object.keys(groups);
-    const fw = $("boardfield").clientWidth || 800;
+    const field = $("boardfield");
+    const fw = field.clientWidth || 800;
     const colW = noteWidthPx() / fw * 100; // responsive column width, matches CSS
     const spread = Math.max(0, 94 - colW);
+
+    // Positions are stored as PERCENTAGES but the board grows in PIXELS, so
+    // measuring where notes landed and growing to fit is a feedback loop: a
+    // taller board puts the same percentage further down, which asks for a
+    // taller board. Pressing arrange repeatedly used to climb ~100px a time
+    // toward a ~2000px ceiling. Fix: decide the pixel height FIRST from the
+    // row count, then derive percentages from that height. Idempotent.
+    const sample = field.querySelector(".clue-note");
+    const noteH = (sample && sample.offsetHeight) || 120;
+    const rowGap = noteH + 18;
+    const rows = Math.max(1, ...srcs.map(f => groups[f].length));
+    const boardH = Math.max(480, 20 + rows * rowGap + 20);
+    field.style.minHeight = boardH + "px";
+
     srcs.forEach((f, gi) => {
       const colX = 3 + (srcs.length > 1 ? (gi / (srcs.length - 1)) * spread : 0);
       groups[f].forEach((idx, j) => {
-        pos[idx] = clampBoardPos(colX + (j % 2) * 2, 2 + j * 13, 0);
+        const yPct = (20 + j * rowGap) / boardH * 100;
+        pos[idx] = clampBoardPos(colX + (j % 2) * 2, yPct, noteH);
       });
     });
     saveBoardPos(pos);
-    const notes = [...$("boardfield").querySelectorAll(".clue-note")];
+    const notes = [...field.querySelectorAll(".clue-note")];
     for (const n of notes) {
       const p = pos[n.dataset.idx];
+      if (!p) continue;
       if (gsapOK()) {
         window.gsap.to(n, { left: p.x + "%", top: p.y + "%", duration: 0.5,
           ease: "power3.inOut", onUpdate: drawStrings,
-          onComplete: () => { fitBoardHeight(); drawStrings(); } });
+          // deliberately NOT fitBoardHeight() — the height is already exact,
+          // and re-measuring is what caused the runaway growth.
+          onComplete: drawStrings });
       } else {
         n.style.left = p.x + "%";
         n.style.top = p.y + "%";
       }
     }
-    if (!gsapOK()) { fitBoardHeight(); drawStrings(); }
+    if (!gsapOK()) drawStrings();
+    sfx("paper");
+  }
+
+  // Escape hatch: drop every saved position and the grown height, back to a
+  // fresh spiral on a default-size board.
+  function resetBoard() {
+    const field = $("boardfield");
+    if (field) field.style.minHeight = "";
+    saveBoardPos({});
+    renderClues();
     sfx("paper");
   }
 

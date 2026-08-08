@@ -465,6 +465,10 @@ const Stage = (() => {
     const arr = el("button", "ghost", "🧹 auto-arrange");
     arr.onclick = () => autoArrange();
     bar.appendChild(org); bar.appendChild(arr);
+    const rst = el("button", "ghost", "↺ reset board");
+    rst.title = "Clear all note positions and board size";
+    rst.onclick = () => resetBoard();
+    bar.appendChild(rst);
     const sizeWrap = el("span", "war-sizes");
     sizeWrap.appendChild(el("span", "war-label", "note size"));
     for (const k of Object.keys(NOTE_SIZES)) {
