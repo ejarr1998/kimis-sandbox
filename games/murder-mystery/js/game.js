@@ -1291,7 +1291,8 @@ HARD RULES:
         `In a murder investigation, the detective asked ${suspectName}: "${question}"\n${suspectName} answered: "${answer}"\n` +
         `The detective's existing clue log (do NOT repeat these): ${JSON.stringify(known)}\n` +
         `If the answer contains a NEW concrete fact useful to the investigation, return STRICT JSON {"clues":["short fact"]} (max 2). ` +
-        `Each fact must name people explicitly (never "the suspect"). If the fact is merely ${suspectName}'s unverified claim, prefix it with "${suspectName} claims". Otherwise {"clues":[]}. No commentary.`,
+        `Each fact must name people explicitly (never "the suspect"). If the fact is merely ${suspectName}'s unverified claim, prefix it with "${suspectName} claims". ` +
+        `Record OBSERVATIONS, NEVER VERDICTS: write what was said or described, not what it proves. Never write that someone is lying, nervous, evasive, hiding something, contradicting themselves, or guilty — and never name anyone as the likely killer. If two accounts clash, log each account separately and let the detective notice. Otherwise {"clues":[]}. No commentary.`,
         { maxTokens: 200 });
       const found = JSON.parse((raw.match(/\{[\s\S]*\}/) || ["{}"])[0]).clues || [];
       const fresh = found.filter(c => c && !known.some(k => overlap(k, c)));
