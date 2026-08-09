@@ -611,8 +611,15 @@ function toggleAppFullscreen() {
     toast._t = setTimeout(() => toast.remove(), 3500);
     return;
   }
-  if (document.fullscreenElement || document.webkitFullscreenElement)
-    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-  else
+  const current = document.fullscreenElement || document.webkitFullscreenElement;
+  const exit = document.exitFullscreen || document.webkitExitFullscreen;
+  if (current === de) {
+    exit.call(document);
+  } else if (current) {
+    // A section (media, image, etc.) is fullscreen; leave it and make the whole
+    // app fullscreen instead of just toggling the section off.
+    exit.call(document).then(() => req.call(de).catch(() => {})).catch(() => {});
+  } else {
     req.call(de).catch(() => {});
+  }
 }
