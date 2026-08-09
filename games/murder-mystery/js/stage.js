@@ -440,13 +440,17 @@ const Stage = (() => {
     const existing = panes.find(p => p.view === "chat");
     if (!existing) {
       if (panes.length >= 2) {
-        // Close anything EXCEPT the Lineup Room. Blindly closing the last pane
-        // evicted the suspect list you just clicked from whenever it happened
-        // to be on the right, leaving no way back to it.
-        const victim = panes.find(p => p.view !== "suspects") || panes[panes.length - 1];
-        closePane(victim.view, { keepStage: true });
+        // Picking a suspect FROM the Lineup Room converts THAT pane into the
+        // interrogation room — whatever the other pane held (notes, report,
+        // board) stays put. Only when no lineup is docked do we take the
+        // other pane's slot.
+        const lineupIdx = panes.findIndex(p => p.view === "suspects");
+        const slot = lineupIdx !== -1 ? lineupIdx : panes.length - 1;
+        closePane(panes[slot].view, { keepStage: true });
+        addPane("chat", { at: slot });
+      } else {
+        addPane("chat");
       }
-      addPane("chat");
     }
     populateChat(s);
     sfx("door");
