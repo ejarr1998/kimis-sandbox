@@ -422,6 +422,14 @@
     const box = $("ranking");
     if (!box || !CASE) return;
     box.innerHTML = "";
+    // Rows only move when the detective asks — sliding a meter or tapping a
+    // band updates in place so the suspect you're judging never jumps away.
+    const tools = el("div", "rank-tools");
+    const rs = el("button", "rank-resort", "↕ re-sort by suspicion");
+    rs.type = "button";
+    rs.onclick = () => { sfx("paper", 0.3); renderRanking(); };
+    tools.appendChild(rs);
+    box.appendChild(tools);
     const ordered = [...CASE.suspects].sort((a, b) => rankOf(b.id) - rankOf(a.id));
     for (const s of ordered) {
       const v = rankOf(s.id);
@@ -475,7 +483,7 @@
       slider.addEventListener("change", () => {
         rankings[s.id] = +slider.value;
         persist().catch(() => { /* stays in memory either way */ });
-        renderRanking(); // re-sort by suspicion, on release only
+        // no re-sort here — the row stays where the detective is looking at it
       });
       row.appendChild(slider);
 
@@ -487,9 +495,10 @@
         chip.title = `${band.label} — ${band.min}–${band.max}`;
         chip.onclick = () => {
           rankings[s.id] = band.set;
+          slider.value = band.set;
+          paint(band.set); // snap the slider in place, but keep the row put
           sfx("paper", 0.3);
           persist().catch(() => {});
-          renderRanking();
         };
         chips.appendChild(chip);
       }
@@ -592,14 +601,10 @@
     evDesc.classList.add("fade-in");
     if (firstTime) {
       examined.push(ev.id);
-      const fresh = (ev.reveals || []).filter(f => !myClues.some(c => overlap(clueText(c), f)));
-      if (fresh.length) {
-        myClues.push(...fresh.map(text => ({ text, from: "📦 " + ev.name, at: new Date().toISOString() })));
-        sfx("pin");
-        $("ev-pinned").textContent = `📌 ${fresh.length} clue${fresh.length > 1 ? "s" : ""} pinned to the board`;
-      }
       renderEvidence(); renderClues(); renderSuspects();
       try { await persist(); } catch (e) { /* state stays in memory either way */ }
+      // Nothing pins itself anymore — the detective decides what matters.
+      $("ev-pinned").textContent = "💡 highlight any line here and pin it to the board";
     }
   }
   function closeEvidence() { closeOverlay("evidence-overlay"); currentEvidence = null; }
@@ -1259,7 +1264,6 @@ HARD RULES:
       $("typing").textContent = "";
       renderChat(true);
       await persist();
-      await extractClues(currentSuspect.name, q, reply);
     } catch (e) {
       $("typing").textContent = "❌ " + e.message;
       try { await persist(); } catch (_) { /* state stays in memory */ }
@@ -1409,7 +1413,6 @@ HARD RULES:
       await Coop.postMessage(sid, { role: "assistant", text: reply });
       $("typing").textContent = "";
       await Coop.setGenerating(sid, false);
-      await extractClues(s.name, q, reply);
     } catch (e) {
       $("typing").textContent = "❌ " + e.message;
       // Always drop `generating`, or the room stays frozen for two minutes.
@@ -1495,7 +1498,6 @@ HARD RULES:
       renderChat(true);
       $("typing").textContent = "";
       await persist();
-      for (const t of turns) await extractClues(t.who.name, q, t.text);
     } catch (e) {
       $("typing").textContent = "❌ " + String(e.message || e).slice(0, 80);
     }
@@ -1509,34 +1511,89 @@ HARD RULES:
     renderChat(false);
   }
 
-  async function extractClues(suspectName, question, answer) {
-    try {
-      const known = myClues.map(clueText);
-      const raw = await SandboxAPI.claude(
-        `In a murder investigation, the detective asked ${suspectName}: "${question}"\n${suspectName} answered: "${answer}"\n` +
-        `The detective's existing clue log (do NOT repeat these): ${JSON.stringify(known)}\n` +
-        `If the answer contains a NEW concrete fact useful to the investigation, return STRICT JSON {"clues":["short fact"]} (max 2). ` +
-        `Each fact must name people explicitly (never "the suspect"). If the fact is merely ${suspectName}'s unverified claim, prefix it with "${suspectName} claims". ` +
-        `Record OBSERVATIONS, NEVER VERDICTS: write what was said or described, not what it proves. Never write that someone is lying, nervous, evasive, hiding something, contradicting themselves, or guilty — and never name anyone as the likely killer. If two accounts clash, log each account separately and let the detective notice. Otherwise {"clues":[]}. No commentary.`,
-        { maxTokens: 200 });
-      const found = JSON.parse((raw.match(/\{[\s\S]*\}/) || ["{}"])[0]).clues || [];
-      const fresh = found.filter(c => c && !known.some(k => overlap(k, c)));
-      if (fresh.length) {
-        const notes = fresh.map(text => ({ text, from: suspectName, at: new Date().toISOString() }));
-        if (Coop.isActive()) {
-          // arrayUnion so two detectives pinning at once merge instead of
-          // clobbering; the listener repaints both boards.
-          await Coop.addClues(notes);
-          sfx("pin");
-        } else {
-          myClues.push(...notes);
-          renderClues(); renderSuspects();
-          sfx("pin");
-          await persist();
-        }
-      }
-    } catch (e) { /* clue extraction is best-effort */ }
+  /* ---------- pin-from-selection ----------
+     Nothing lands on the corkboard automatically. The detective highlights any
+     text on screen — a line from an interrogation, the case file, an evidence
+     description — and a "📌 pin note" chip appears beside the selection. Tap it
+     and that exact text becomes a note on the board. This is the ONLY way
+     notes are created. */
+  const PIN_MAX = 400; // characters; a note is a fact, not a paragraph dump
+
+  function pinSourceFor(node) {
+    // Attribute the note to wherever the text was selected from.
+    const elNode = node && (node.nodeType === 1 ? node : node.parentElement);
+    if (!elNode) return "On the case";
+    if (elNode.closest("#evidence-overlay")) return "📦 " + (currentEvidence ? currentEvidence.name : "Evidence");
+    if (elNode.closest("#chat-overlay, .pane-chat")) return currentSuspect ? currentSuspect.name : "Interrogation";
+    return "On the case";
   }
+
+  async function pinSelection(btn) {
+    const sel = window.getSelection();
+    const text = (sel ? sel.toString() : "").replace(/\s+/g, " ").trim();
+    if (!text) return;
+    const note = { text: text.slice(0, PIN_MAX), from: pinSourceFor(sel.anchorNode), at: new Date().toISOString() };
+    const already = myClues.some(c => overlap(clueText(c), note.text));
+    hidePinChip();
+    if (already) { toastNote("Already on the board"); return; }
+    if (Coop.isActive()) {
+      // arrayUnion so two detectives pinning at once merge instead of
+      // clobbering; the listener repaints both boards.
+      try { await Coop.addClues([note]); } catch (e) { /* stays unpinned */ }
+    } else {
+      myClues.push(note);
+      renderClues(); renderSuspects();
+      try { await persist(); } catch (e) { /* state stays in memory either way */ }
+    }
+    sfx("pin");
+    toastNote("📌 pinned to the board");
+  }
+
+  function toastNote(msg) {
+    let t = $("pin-toast");
+    if (!t) {
+      t = el("div"); t.id = "pin-toast";
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(t._t);
+    t._t = setTimeout(() => t.classList.remove("show"), 1600);
+  }
+
+  function hidePinChip() {
+    const b = $("pin-chip");
+    if (b) b.classList.add("hidden");
+  }
+
+  function updatePinChip() {
+    const sel = window.getSelection();
+    const text = (sel && !sel.isCollapsed ? sel.toString() : "").trim();
+    let b = $("pin-chip");
+    if (text.length < 3 || !sel.rangeCount) { hidePinChip(); return; }
+    // Don't offer pinning on text the user is editing.
+    const anchor = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement);
+    if (anchor && anchor.closest("input, textarea, [contenteditable]")) { hidePinChip(); return; }
+    if (!b) {
+      b = el("button"); b.id = "pin-chip"; b.textContent = "📌 pin note";
+      // pointerdown, not click: we must act before the selection collapses.
+      b.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); pinSelection(b); });
+      document.body.appendChild(b);
+    }
+    const r = sel.getRangeAt(0).getBoundingClientRect();
+    b.style.left = Math.max(8, Math.min(window.innerWidth - 120, r.left + r.width / 2 - 55)) + "px";
+    b.style.top = Math.max(8, r.top - 42) + "px";
+    b.classList.remove("hidden");
+  }
+
+  let pinChipTimer = null;
+  document.addEventListener("selectionchange", () => {
+    clearTimeout(pinChipTimer);
+    pinChipTimer = setTimeout(updatePinChip, 150);
+  });
+  // Scrolling or resizing strands the chip mid-air; re-seat or drop it.
+  window.addEventListener("scroll", hidePinChip, true);
+  window.addEventListener("resize", hidePinChip);
 
   async function persist() {
     const doc = { examined, accusation: accused, notesSummary,
