@@ -915,6 +915,9 @@
 
 /* ---------- suspicion board tools ---------- */
 .rank-tools { display: flex; justify-content: flex-end; margin-bottom: 0.4rem; }
+/* In the Board of Suspicion pane #ranking is a grid, so the tools bar would
+   otherwise claim a cell of its own and stagger every row after it. */
+.suspicion-room #ranking .rank-tools { grid-column: 1 / -1; }
 .rank-resort {
   font-family: "Special Elite", monospace; font-size: 0.72rem; letter-spacing: 0.08em;
   text-transform: uppercase; background: none; color: var(--mute);
