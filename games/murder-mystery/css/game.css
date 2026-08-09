@@ -890,3 +890,34 @@
     .panel, .bubble, .verdict-stamp, .mug.accused .accused-stamp, .fade-in { animation: none !important; }
     * { transition-duration: 0.01ms !important; }
   }
+
+/* ---------- pin-from-selection ---------- */
+#pin-chip {
+  position: fixed; z-index: 4000;
+  font-family: "Special Elite", monospace; font-size: 0.8rem; letter-spacing: 0.06em;
+  background: var(--paper, #efe6d0); color: #2c2519;
+  border: 1px solid #b09a6a; border-radius: 3px;
+  padding: 0.4rem 0.7rem; cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.45);
+}
+#pin-chip:hover { background: #f7efdc; }
+#pin-chip.hidden { display: none; }
+
+#pin-toast {
+  position: fixed; left: 50%; bottom: 4.5rem; transform: translateX(-50%) translateY(8px);
+  z-index: 4000; background: var(--paper, #efe6d0); color: #2c2519;
+  font-family: "Special Elite", monospace; font-size: 0.85rem;
+  padding: 0.5rem 1rem; border-radius: 4px; border: 1px solid #b09a6a;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+  opacity: 0; pointer-events: none; transition: opacity 0.18s, transform 0.18s;
+}
+#pin-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---------- suspicion board tools ---------- */
+.rank-tools { display: flex; justify-content: flex-end; margin-bottom: 0.4rem; }
+.rank-resort {
+  font-family: "Special Elite", monospace; font-size: 0.72rem; letter-spacing: 0.08em;
+  text-transform: uppercase; background: none; color: var(--mute);
+  border: 1px dashed var(--line); border-radius: 3px; padding: 0.3rem 0.6rem; cursor: pointer;
+}
+.rank-resort:hover { color: var(--paper); border-color: var(--brass); }
