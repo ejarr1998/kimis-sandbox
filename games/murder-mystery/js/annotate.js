@@ -24,7 +24,7 @@ const Annotate = (() => {
   const STORE_PREFIX = "deadair_anno_";
   const MAX_STROKES = 300;
   const PEN = { tool: "pen", color: "#b3261e", size: 2.5 };
-  const HIGHLIGHTER = { tool: "hl", color: "rgba(250,220,90,0.35)", size: 14 };
+  const HIGHLIGHTER = { tool: "hl", color: "rgba(250,222,95,0.32)", size: 14 };
   const ERASER = { tool: "eraser", color: "#000", size: 18 };
 
   // element -> state (see attach)
@@ -82,7 +82,10 @@ const Annotate = (() => {
       ctx.strokeStyle = "#000";
       ctx.lineWidth = (s.size || 0.02) * w;
     } else if (s.tool === "hl") {
-      ctx.globalCompositeOperation = "multiply";
+      // source-over, not multiply: multiply shifts whatever is underneath
+      // toward dark yellow, which turns the stroke into whiteout over print.
+      // A simple translucent wash keeps the underlying ink its own color.
+      ctx.globalCompositeOperation = "source-over";
       ctx.strokeStyle = s.color || HIGHLIGHTER.color;
       ctx.lineWidth = (s.size || 0.05) * w;
     } else {
@@ -262,9 +265,12 @@ const Annotate = (() => {
       const dw = (p[0] - last[0]) * st.el.clientWidth;
       const dh = (p[1] - last[1]) * st.el.clientHeight;
       if (dw * dw + dh * dh < 1.2) return;
-      const from = cur.points.length - 1;
       cur.points.push(p);
-      drawStroke(st, cur, from);
+      // Repaint the whole in-progress stroke as ONE path: incremental
+      // segment draws stack alpha at every joint, which streaks translucent
+      // tools (the highlighter most of all).
+      redraw(st);
+      drawStroke(st, cur, 0);
     });
 
     const finish = (e) => {
