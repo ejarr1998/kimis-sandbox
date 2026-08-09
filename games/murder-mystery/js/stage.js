@@ -358,6 +358,18 @@ const Stage = (() => {
     const doc = el("article", "reader paper-doc");
     doc.appendChild(el("div", "reader-kicker", "Homicide Division · Case № " + CODE));
     doc.appendChild(el("h2", "reader-title", CASE.title));
+    // The establishing shot belongs in the case file too — the desk report
+    // shows it, so the fullscreen reader shouldn't lose it.
+    if (CASE.sceneImageUrl) {
+      const fig = el("figure", "reader-scene");
+      const img = el("img");
+      img.src = CASE.sceneImageUrl;
+      img.alt = CASE.sceneImage || CASE.setting || "the scene";
+      img.loading = "lazy";
+      fig.appendChild(img);
+      if (CASE.setting) fig.appendChild(el("figcaption", null, CASE.setting));
+      doc.appendChild(fig);
+    }
     doc.appendChild(el("p", "reader-text", CASE.openingScene));
     const tools = el("div", "reader-tools");
     const nar = el("button", "ghost", "🔊 hear the report read aloud");
