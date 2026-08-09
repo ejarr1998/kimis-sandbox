@@ -27,7 +27,6 @@
 .stage-nav-btn:hover { color: var(--paper); border-color: var(--line); }
 .stage-nav-btn.on { color: var(--brass); background: rgba(201,168,106,0.1); border-color: rgba(201,168,106,0.35); }
 .stage-close {
-  margin-left: auto;
   background: none; color: var(--red);
   border: 1px solid rgba(138,47,43,0.55); border-radius: 3px;
   font-family: "Special Elite", monospace; font-size: 0.7rem;
@@ -324,12 +323,12 @@ body.split-dragging-v, body.split-dragging-v * { cursor: row-resize !important; 
   .suspicion-room .war-sizes { display: none; }
 }
 
-/* ---------- swap sides ----------
-   Sits in the right-hand group beside "back to the desk". Both buttons carry
-   margin-left:auto, so when swap is visible it takes the slack and close needs
-   its auto margin cancelled or the two drift apart. */
-.stage-swap {
+/* ---------- right-hand group (swap, fullscreen, close) ---------- */
+.stage-right {
   margin-left: auto;
+  display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;
+}
+.stage-swap {
   background: none; color: var(--brass);
   border: 1px solid rgba(201,168,106,0.45); border-radius: 3px;
   font-family: "Special Elite", monospace; font-size: 0.7rem;
@@ -339,7 +338,14 @@ body.split-dragging-v, body.split-dragging-v * { cursor: row-resize !important; 
 }
 .stage-swap:hover { background: rgba(201,168,106,0.12); }
 .stage-swap.hidden { display: none; }
-.stage-swap:not(.hidden) ~ .stage-close { margin-left: 0.5rem; }
+.stage-fs {
+  background: none; color: var(--paper);
+  border: 1px solid rgba(239,230,208,0.35); border-radius: 3px;
+  font-size: 1rem; line-height: 1;
+  padding: 0.25rem 0.4rem;
+  cursor: pointer;
+}
+.stage-fs:hover { background: rgba(201,168,106,0.12); }
 
 @media (max-width: 620px) {
   /* keep the bar on one line: the arrow alone still reads as "swap" */

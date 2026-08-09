@@ -180,14 +180,20 @@ const Stage = (() => {
       b.onclick = () => switchPrimary(v);
       nav.appendChild(b);
     }
+    const right = el("div", "stage-right");
     const swapBtn = el("button", "stage-swap", "⇆ swap sides");
     swapBtn.title = "Swap the two views (Alt+S)";
     swapBtn.onclick = () => swapPanes();
-    bar.appendChild(swapBtn);
+    right.appendChild(swapBtn);
+    const fsBtn = el("button", "stage-fs", "⛶");
+    fsBtn.title = "Toggle fullscreen";
+    fsBtn.onclick = () => toggleAppFullscreen();
+    right.appendChild(fsBtn);
     const closeBtn = el("button", "stage-close", "✕ back to the desk");
     closeBtn.onclick = () => close();   // NB: must not shadow close() above
+    right.appendChild(closeBtn);
     bar.appendChild(nav);
-    bar.appendChild(closeBtn);
+    bar.appendChild(right);
     const panesWrap = el("div", "stage-panes");
     s.appendChild(bar);
     s.appendChild(panesWrap);
