@@ -54,7 +54,7 @@
         try { keys.currentTime = 0; keys.play().catch(() => {}); } catch (e) { /* ignore */ }
       }
       const stopKeys = () => {
-        if (keys) { try { keys.pause(); keys.currentTime = 0; } catch (e) { /* ignore */ } }
+        if (keys) { try { keys.pause(); keys.currentTime = 0; } catch (e) { /* ignore */ }
       };
       const finish = () => {
         if (done) return; done = true;
@@ -759,6 +759,70 @@
     return b;
   }
 
+  /* ---------- edit a pinned note's wording ----------
+     Pinning copies text verbatim; sometimes the detective wants to rephrase it
+     in their own words. The 📝 affordance opens an inline editor on the note;
+     saving rewrites the clue in place (same board slot, same attribution). */
+  function makeEditBtn(c, i) {
+    const b = el("button", "note-edit-btn", "📝");
+    b.type = "button";
+    b.title = "Edit this note's wording";
+    b.setAttribute("aria-label", "Edit note: " + clueText(c).slice(0, 60));
+    b.addEventListener("pointerdown", (e) => e.stopPropagation()); // don't start a drag
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      startNoteEdit(e.currentTarget.closest(".clue-note, .mnote"), c, i);
+    });
+    return b;
+  }
+
+  function startNoteEdit(note, c, i) {
+    if (!note || note.querySelector(".note-edit")) return;
+    note.classList.add("editing"); // lets the clamped note grow for the textarea
+    const txt = note.querySelector(".txt, .mtxt");
+    if (txt) txt.classList.add("hidden");
+    const box = el("div", "note-edit");
+    // desk notes drag on pointerdown — keep the editor from starting a drag
+    box.addEventListener("pointerdown", (e) => e.stopPropagation());
+    const ta = document.createElement("textarea");
+    ta.value = clueText(c);
+    ta.maxLength = PIN_MAX;
+    ta.rows = 4;
+    ta.setAttribute("aria-label", "Note text");
+    const row = el("div", "note-edit-btns");
+    const save = el("button", "ghost", "save");
+    save.type = "button";
+    save.onclick = () => commitNoteEdit(i, ta.value);
+    const cancel = el("button", "ghost", "cancel");
+    cancel.type = "button";
+    cancel.onclick = () => renderClues();
+    row.appendChild(save); row.appendChild(cancel);
+    box.appendChild(ta); box.appendChild(row);
+    note.appendChild(box);
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
+
+  async function commitNoteEdit(i, text) {
+    const clean = String(text || "").replace(/\s+/g, " ").trim().slice(0, PIN_MAX);
+    const c = myClues[i];
+    if (!clean) { toastNote("A note can't be empty — tuck it into the archive instead"); return; }
+    if (!c) { renderClues(); return; }
+    if (clueText(c) === clean) { renderClues(); return; } // no change
+    // plain-string clues (old saves) upgrade to the object form on first edit
+    myClues[i] = { text: clean, from: clueFrom(c),
+      at: (typeof c === "object" && c && c.at) || new Date().toISOString() };
+    renderClues();
+    if (Coop.isActive()) {
+      // the shared board is one document, so the array goes back whole
+      try { await Coop.setClues(myClues); } catch (e) { /* listener resyncs */ }
+    } else {
+      try { await persist(); } catch (e) { /* state stays in memory either way */ }
+    }
+    sfx("paper", 0.3);
+    toastNote("📝 note reworded");
+  }
+
   function renderClues() {
     const field = $("boardfield");
     // wipe old notes + old mobile list (keep svg / empty msg / summary card)
@@ -803,6 +867,7 @@
       note.appendChild(el("span", "txt", clueText(c)));
       note.appendChild(el("span", "src", clueFrom(c)));
       note.appendChild(makeTuckBtn(c));
+      note.appendChild(makeEditBtn(c, i));
       note.tabIndex = 0;
       makeDraggable(note);
       addTilt(note, 4);
@@ -841,13 +906,15 @@
       list.appendChild(det);
     }
     if (!visible.length) { field.appendChild(list); return; }
-    // group clues by source, in first-seen order (archived notes excluded)
+    // group clues by source, in first-seen order (archived notes excluded).
+    // Track each clue's myClues index alongside it — editing rewrites by index.
     const groups = {}, order = [];
-    for (const c of visible) {
+    myClues.forEach((c, i) => {
+      if (isHidden(c)) return;
       const f = clueFrom(c);
       if (!groups[f]) { groups[f] = []; order.push(f); }
-      groups[f].push(c);
-    }
+      groups[f].push([c, i]);
+    });
     order.forEach((f, gi) => {
       const det = document.createElement("details");
       det.className = "cluegroup";
@@ -857,10 +924,11 @@
       sum.appendChild(el("span", "cnt", groups[f].length + " pinned"));
       sum.appendChild(el("span", "tw"));
       det.appendChild(sum);
-      for (const c of groups[f]) {
+      for (const [c, i] of groups[f]) {
         const mn = el("div", "mnote");
         mn.appendChild(el("span", "mtxt", clueText(c)));
         mn.appendChild(makeTuckBtn(c));
+        mn.appendChild(makeEditBtn(c, i));
         det.appendChild(mn);
       }
       list.appendChild(det);
@@ -1693,7 +1761,8 @@ HARD RULES:
 
   // ---------- accusation ----------
   function updateSealState() {
-    const complete = !!(pickedKiller && $("pick-weapon").value.trim() && $("pick-location").value.trim());
+    const complete = !!(pickedKiller && $("pick-weapon").value.trim() &&
+      $("pick-location").value.trim() && $("pick-motive").value.trim());
     // In coop the button doubles as "withdraw my signature", so it must stay
     // live once signed even while the charge is being reworked.
     if (Coop.isActive() && $("seal-btn").classList.contains("signed")) {
@@ -1744,7 +1813,7 @@ HARD RULES:
     pickedKiller = null;
     renderLineup();
     // free-text fields: the warrant never reveals the possibility space
-    for (const id of ["pick-weapon", "pick-location"]) {
+    for (const id of ["pick-weapon", "pick-location", "pick-motive"]) {
       const inp = $(id);
       inp.value = "";
       inp.oninput = () => { updateSealState(); if (Coop.isActive()) pushWarrantField(id); };
@@ -1770,27 +1839,40 @@ HARD RULES:
       .replace(/\s+/g, " ").trim();
   }
   const localMatch = (typed, truth) => normAnswer(typed) === normAnswer(truth);
+  // A motive is a sentence, not a name, so the offline fallback can't demand an
+  // exact match: pass when the typed answer and the true motive share at least
+  // two significant words ("inheritance" + "estate" against the full truth).
+  const localMotiveMatch = (typed, truth) => {
+    if (localMatch(typed, truth)) return true;
+    const sig = (s) => normAnswer(s).split(" ").filter(w => w.length > 3 && !STOPWORDS.has(w));
+    const tw = new Set(sig(typed));
+    return sig(truth).filter(w => tw.has(w)).length >= 2;
+  };
 
-  // Claude judges whether the typed weapon/location are close enough to the truth
-  async function auditAccusation(weapon, location) {
+  // Claude judges whether the typed weapon/location/motive are close enough to the truth
+  async function auditAccusation(weapon, location, motive) {
     const sol = CASE.solution;
     try {
       const raw = await SandboxAPI.claude(
         `You are the forensic auditor on a murder case, checking an arrest warrant before it is sealed.\n` +
-        `TRUE WEAPON: "${sol.weapon}"\nTRUE LOCATION: "${sol.location}"\n` +
-        `The detective wrote — weapon: "${weapon}", location: "${location}".\n` +
+        `TRUE WEAPON: "${sol.weapon}"\nTRUE LOCATION: "${sol.location}"\nTRUE MOTIVE: "${sol.motive}"\n` +
+        `The detective wrote — weapon: "${weapon}", location: "${location}", motive: "${motive}".\n` +
         `For each answer decide if it is a close enough representation of the truth. ` +
         `Accept typos, minor paraphrase, synonyms, and reasonable specificity shifts ("the conservatory" vs "conservatory" passes). ` +
+        `For the motive, pass any answer that captures the essential reason — "the inheritance", "money from the will" and "he stood to inherit the estate" are the same answer — even if loosely or partially worded. ` +
+        `Fail a motive only if it names a genuinely different reason ("jealous rage" when the truth is debt) or is too vague to credit ("he wanted him gone" always fails).\n` +
         `Fail an answer only if it names a genuinely different object or place ("ice pick" for an ice scraper fails). ` +
         `Fail answers too vague to credit ("knife" when the true weapon is "the antique letter opener" fails; "somewhere upstairs" always fails).\n` +
-        `Reply with STRICT JSON only, no commentary: {"weapon": true or false, "location": true or false}`,
+        `Reply with STRICT JSON only, no commentary: {"weapon": true or false, "location": true or false, "motive": true or false}`,
         { maxTokens: 300 });
       const v = JSON.parse((raw.match(/\{[\s\S]*\}/) || ["{}"])[0]);
-      if (typeof v.weapon !== "boolean" || typeof v.location !== "boolean") throw new Error("bad verdict");
-      return { weapon: v.weapon, location: v.location };
+      if (typeof v.weapon !== "boolean" || typeof v.location !== "boolean" || typeof v.motive !== "boolean")
+        throw new Error("bad verdict");
+      return { weapon: v.weapon, location: v.location, motive: v.motive };
     } catch (e) {
       console.warn("[Dead Air] AI accusation audit failed, using lenient local comparison:", e && e.message ? e.message : e);
-      return { weapon: localMatch(weapon, sol.weapon), location: localMatch(location, sol.location) };
+      return { weapon: localMatch(weapon, sol.weapon), location: localMatch(location, sol.location),
+        motive: localMotiveMatch(motive, sol.motive) };
     }
   }
 
@@ -1811,9 +1893,10 @@ HARD RULES:
   function pushWarrantField(id) {
     clearTimeout(warrantPush);
     warrantPush = setTimeout(() => {
-      Coop.updateWarrant(id === "pick-weapon"
-        ? { weapon: $("pick-weapon").value }
-        : { location: $("pick-location").value });
+      Coop.updateWarrant(
+        id === "pick-weapon" ? { weapon: $("pick-weapon").value } :
+        id === "pick-location" ? { location: $("pick-location").value } :
+        { motive: $("pick-motive").value });
     }, 400);
   }
 
@@ -1821,9 +1904,10 @@ HARD RULES:
     if (w.sealed && w.verdict) return applySealedWarrant(w);
 
     // Mirror remote edits, but never yank text out from under someone mid-type.
-    const wpn = $("pick-weapon"), loc = $("pick-location");
+    const wpn = $("pick-weapon"), loc = $("pick-location"), mot = $("pick-motive");
     if (document.activeElement !== wpn && (w.weapon || "") !== wpn.value) wpn.value = w.weapon || "";
     if (document.activeElement !== loc && (w.location || "") !== loc.value) loc.value = w.location || "";
+    if (document.activeElement !== mot && (w.motive || "") !== mot.value) mot.value = w.motive || "";
 
     if (w.killerId && (!pickedKiller || pickedKiller.id !== w.killerId)) {
       const s = CASE.suspects.find(x => x.id === w.killerId);
@@ -1886,13 +1970,15 @@ HARD RULES:
   async function signJointWarrant() {
     const btn = $("seal-btn");
     if (btn.classList.contains("signed")) { await Coop.unsignWarrant(); return; }
-    if (!pickedKiller || !$("pick-weapon").value.trim() || !$("pick-location").value.trim()) return;
+    if (!pickedKiller || !$("pick-weapon").value.trim() || !$("pick-location").value.trim() ||
+        !$("pick-motive").value.trim()) return;
     btn.disabled = true;
     try {
       clearTimeout(warrantPush); // sign the charge we can actually see
       await Coop.updateWarrant({
         killerId: pickedKiller.id, killerName: pickedKiller.name,
-        weapon: $("pick-weapon").value, location: $("pick-location").value
+        weapon: $("pick-weapon").value, location: $("pick-location").value,
+        motive: $("pick-motive").value
       });
       const res = await Coop.signWarrant();
       if (!res.ok) { btn.disabled = false; return; }
@@ -1903,11 +1989,12 @@ HARD RULES:
       if (valid.length >= 2 && valid.length >= roster.size) {
         $("joint-note").textContent = "Both signatures on record. Consulting the coroner…";
         await Coop.sealWarrant(async (w) => {
-          const v = await auditAccusation(w.weapon, w.location);
+          const v = await auditAccusation(w.weapon, w.location, w.motive);
           return {
             killerId: w.killerId, weapon: w.weapon, location: w.location,
-            weaponTyped: w.weapon, locationTyped: w.location,
-            weaponCorrect: v.weapon, locationCorrect: v.location,
+            motive: w.motive,
+            weaponTyped: w.weapon, locationTyped: w.location, motiveTyped: w.motive,
+            weaponCorrect: v.weapon, locationCorrect: v.location, motiveCorrect: v.motive,
             signedBy: valid, at: new Date().toISOString()
           };
         });
@@ -1937,17 +2024,19 @@ HARD RULES:
     if (accused) return; // already sealed
     const seal = $("seal-btn");
     const suspect = pickedKiller;
-    const weapon = $("pick-weapon").value.trim(), location = $("pick-location").value.trim();
-    if (!suspect || !weapon || !location) return;
+    const weapon = $("pick-weapon").value.trim(), location = $("pick-location").value.trim(),
+          motive = $("pick-motive").value.trim();
+    if (!suspect || !weapon || !location || !motive) return;
     seal.disabled = true;
     seal.textContent = "Consulting the coroner…";
     try {
-      const verdict = await auditAccusation(weapon, location);
+      const verdict = await auditAccusation(weapon, location, motive);
       accused = {
         killerId: suspect.id,
-        weapon, location,
-        weaponTyped: weapon, locationTyped: location,
+        weapon, location, motive,
+        weaponTyped: weapon, locationTyped: location, motiveTyped: motive,
         weaponCorrect: verdict.weapon, locationCorrect: verdict.location,
+        motiveCorrect: verdict.motive,
         at: new Date().toISOString()
       };
       await persist();
@@ -1984,19 +2073,25 @@ HARD RULES:
   async function showReveal(fresh) {
     const sol = CASE.solution;
     const killerName = CASE.suspects.find(s => s.id === sol.killerId)?.name || sol.killerId;
-    // AI-audited verdicts when present; exact-match for pre-audit (dropdown-era) saves
+    // AI-audited verdicts when present; exact-match for pre-audit (dropdown-era) saves.
+    // Motive joined the warrant later still — saves sealed before then carry no
+    // motiveTyped and stay on the old three-part scoring.
+    const hasMotive = accused.motiveTyped !== undefined || accused.motive !== undefined;
     const k = accused.killerId === sol.killerId,
           w = accused.weaponCorrect !== undefined ? accused.weaponCorrect : accused.weapon === sol.weapon,
-          l = accused.locationCorrect !== undefined ? accused.locationCorrect : accused.location === sol.location;
-    const score = [k, w, l].filter(Boolean).length;
-    const stamp = score === 3 ? ["Case Closed", "win"] : k ? ["Killer Caught", "partial"] : ["Case Unsolved", "loss"];
+          l = accused.locationCorrect !== undefined ? accused.locationCorrect : accused.location === sol.location,
+          m = hasMotive ? (accused.motiveCorrect !== undefined ? accused.motiveCorrect
+                           : localMatch(accused.motiveTyped || accused.motive, sol.motive)) : null;
+    const parts = hasMotive ? [k, w, l, m] : [k, w, l];
+    const score = parts.filter(Boolean).length;
+    const stamp = score === parts.length ? ["Case Closed", "win"] : k ? ["Killer Caught", "partial"] : ["Case Unsolved", "loss"];
     $("stamp-slot").innerHTML = "";
     $("stamp-slot").appendChild(el("div", "verdict-stamp " + stamp[1], stamp[0]));
     sfx("stamp", 0.6); // heavier hit for the verdict stamp
     const verdictEl = $("verdict");
     verdictEl.textContent = "";
     verdictEl.appendChild(document.createTextNode(
-      score === 3 ? "A perfect solve. The city sleeps easier tonight." :
+      score === parts.length ? "A perfect solve. The city sleeps easier tonight." :
       k ? "You caught the killer — but the details got away from you." :
       "The wrong person took the fall for this one."));
     verdictEl.appendChild(document.createElement("br"));
@@ -2007,6 +2102,7 @@ HARD RULES:
     addPart("Killer: ", k ? "✓ correct" : "✗ it was " + killerName);
     addPart("Weapon: ", w ? "✓" : "✗ " + sol.weapon);
     addPart("Location: ", l ? "✓" : "✗ " + sol.location);
+    if (hasMotive) addPart("Motive: ", m ? "✓" : "✗ " + sol.motive);
     verdictEl.lastChild.textContent = verdictEl.lastChild.textContent.replace(/ · $/, "");
     $("recap").textContent = sol.recap;
 
