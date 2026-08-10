@@ -167,6 +167,13 @@ const Coop = (() => {
     unsubs.push(u);
     return u;
   }
+  // Full-array write for edits (arrayUnion can only append). Two detectives
+  // editing different notes at the same instant is last-writer-wins — the
+  // listener then repaints both boards with the surviving array.
+  async function setClues(clues) {
+    if (!active) return;
+    await cluesRef().set({ clues }, { merge: true });
+  }
 
   /* ---------- joint warrant ----------
      One warrant per case, co-signed. A signature records exactly WHAT was
@@ -179,7 +186,8 @@ const Coop = (() => {
   // Canonical fingerprint of the charge. Signatures are bound to this string.
   function chargeOf(w) {
     return [w.killerId || "", (w.weapon || "").trim().toLowerCase(),
-            (w.location || "").trim().toLowerCase()].join("|");
+            (w.location || "").trim().toLowerCase(),
+            (w.motive || "").trim().toLowerCase()].join("|");
   }
   function validSignatures(w) {
     const charge = chargeOf(w);
@@ -200,7 +208,8 @@ const Coop = (() => {
       const snap = await tx.get(warrantRef());
       const w = snap.exists ? snap.data() : {};
       if (w.sealed) return { ok: false, reason: "sealed" };
-      if (!w.killerId || !(w.weapon || "").trim() || !(w.location || "").trim())
+      if (!w.killerId || !(w.weapon || "").trim() || !(w.location || "").trim() ||
+          !(w.motive || "").trim())
         return { ok: false, reason: "incomplete" };
       const sigs = Object.assign({}, w.signatures);
       sigs[ME] = { at: serverNow(), on: chargeOf(w) };
@@ -285,7 +294,7 @@ const Coop = (() => {
 
   return { init, isActive: () => active, me: () => ME, serverNow,
            claimFloor, releaseFloor, setTyping, setGenerating, heldSuspect: () => heldSuspect,
-           postMessage, watchRoom, addClues, watchClues, watchPresence, teardown,
+           postMessage, watchRoom, addClues, setClues, watchClues, watchPresence, teardown,
            updateWarrant, signWarrant, unsignWarrant, sealWarrant, watchWarrant,
            validSignatures, chargeOf };
 })();
