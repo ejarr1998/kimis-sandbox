@@ -359,7 +359,13 @@
         startDossier();
       }
     } catch (e) {
-      $("status").textContent = "❌ " + e.message;
+      // Keep a way home: the loading state's lobby link must survive the error.
+      const st = $("status");
+      st.textContent = "❌ " + e.message + " ";
+      const back = el("a");
+      back.href = "index.html";
+      back.textContent = "← back to the lobby";
+      st.appendChild(back);
     }
   }
 
