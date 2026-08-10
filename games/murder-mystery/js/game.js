@@ -54,7 +54,7 @@
         try { keys.currentTime = 0; keys.play().catch(() => {}); } catch (e) { /* ignore */ }
       }
       const stopKeys = () => {
-        if (keys) { try { keys.pause(); keys.currentTime = 0; } catch (e) { /* ignore */ }
+        if (keys) { try { keys.pause(); keys.currentTime = 0; } catch (e) { /* ignore */ } }
       };
       const finish = () => {
         if (done) return; done = true;
