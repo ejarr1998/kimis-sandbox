@@ -608,7 +608,7 @@
     color: var(--mute);
     max-height: 30vh; overflow-y: auto;
     border-top: 1px dashed var(--line);
-    padding-top: 0.4rem; padding-bottom: 0.2rem; margin-top: 0.2rem;
+    padding: 0.4rem 0 0.2rem; margin-top: 0.2rem;
   }
   #chatlog { max-height: 46vh; overflow-y: auto; padding-right: 0.3rem; margin-bottom: 0.7rem; }
   .bubble { border-radius: 4px; padding: 0.6rem 0.9rem; margin: 0.5rem 0;
