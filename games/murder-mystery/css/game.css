@@ -392,6 +392,35 @@
   .note-tuck:hover { background: rgba(138,47,43,0.3); }
   @media (hover: none) { .note-tuck { opacity: 0.7; } } /* touch: always subtly visible */
 
+  /* ---------- per-note edit (reword a pinned note) ---------- */
+  .note-edit-btn {
+    position: absolute; top: 5px; right: 51px; z-index: 3; /* left of the tuck 🗄 (right:27px) */
+    width: 20px; height: 20px; padding: 0;
+    border: 0; border-radius: 3px;
+    background: rgba(138,47,43,0.14); color: var(--red);
+    font-size: 0.6rem; line-height: 1; cursor: pointer;
+    opacity: 0; transition: opacity 0.15s;
+  }
+  .clue-note:hover .note-edit-btn, .clue-note:focus-within .note-edit-btn,
+  .mnote:hover .note-edit-btn, .mnote:focus-within .note-edit-btn { opacity: 1; }
+  .note-edit-btn:hover { background: rgba(138,47,43,0.3); }
+  @media (hover: none) { .note-edit-btn { opacity: 0.7; } }
+  .mnote .note-edit-btn { top: 6px; right: 30px; }
+
+  /* while the inline editor is open the note must grow past its 5-line clamp */
+  .clue-note.editing { max-height: none; cursor: default; }
+  .note-edit { position: relative; z-index: 4; }
+  .note-edit textarea {
+    width: 100%; box-sizing: border-box; resize: vertical;
+    font: inherit; font-size: 0.78rem; line-height: 1.45;
+    background: rgba(255,250,235,0.9); color: #2c2519;
+    border: 1px dashed rgba(138,47,43,0.55); border-radius: 3px;
+    padding: 0.3rem 0.35rem;
+    user-select: text; -webkit-user-select: text; /* the note itself is unselectable */
+  }
+  .note-edit-btns { display: flex; gap: 0.45rem; margin-top: 0.3rem; }
+  .note-edit-btns .ghost { font-size: 0.62rem; padding: 0.18rem 0.55rem; color: #6b5138; }
+
   #archive-drawer {
     position: fixed; right: 14px; bottom: 14px; z-index: 130; /* above desk + stage, near overlays */
     width: min(340px, calc(100vw - 28px));
@@ -579,7 +608,7 @@
     color: var(--mute);
     max-height: 30vh; overflow-y: auto;
     border-top: 1px dashed var(--line);
-    padding: 0.4rem 0 0.2rem; margin-top: 0.2rem;
+    padding-top: 0.4rem; padding-bottom: 0.2rem; margin-top: 0.2rem;
   }
   #chatlog { max-height: 46vh; overflow-y: auto; padding-right: 0.3rem; margin-bottom: 0.7rem; }
   .bubble { border-radius: 4px; padding: 0.6rem 0.9rem; margin: 0.5rem 0;
